@@ -167,6 +167,15 @@
           <label>Your Name</label>
           <input type="text" name="contact_name" id="contact_name" required>
 
+          <label for="contact_email">Email</label>
+          <input
+            type="email"
+            id="contact_email"
+            name="contact_email"
+            placeholder="you@example.com"
+            required
+          />
+
           <label>Mobile Number</label>
           <input type="tel" name="contact_phone" id="contact_phone" required placeholder="(xxx) xxx-xxxx">
 
@@ -176,7 +185,7 @@
           <div class="helper">Currently quoting within ~25 miles of ZIP 20735.</div>
 
           <div id="contact-error" class="error-text">
-            Please fill in your name, mobile number, and ZIP code to continue.
+            Please fill in your name, email, mobile number, and ZIP code to continue.
           </div>
 
           <button type="button" onclick="goToStep2()">Continue to Service Details</button>
@@ -282,11 +291,12 @@
 
     function goToStep2() {
       const name = document.getElementById('contact_name').value.trim();
+      const email = document.getElementById('contact_email').value.trim();
       const phone = document.getElementById('contact_phone').value.trim();
       const zip = document.getElementById('zip_code').value.trim();
       const errorEl = document.getElementById('contact-error');
 
-      if (!name || !phone || !zip) {
+      if (!name || !email || !phone || !zip) {
         errorEl.style.display = 'block';
         return;
       } else {
