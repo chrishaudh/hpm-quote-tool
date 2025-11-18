@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Hawkins Pro Mounting - Instant Quote</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background:#f5f5f5; margin:0; padding:0; }
+    .container { max-width: 600px; margin: 40px auto; background:#fff; padding:24px; border-radius:16px; box-shadow:0 4px 12px rgba(0,0,0,0.06); }
+    h1 { font-size: 24px; margin-bottom: 8px; }
+    p { color:#555; margin-top:0; }
+    label { display:block; margin-top:16px; font-weight:600; }
+    select, input { width:100%; padding:8px 10px; margin-top:6px; border-radius:8px; border:1px solid #ccc; }
+    button { margin-top:24px; width:100%; padding:12px; border:none; border-radius:999px; background:#0070C9; color:#fff; font-size:16px; font-weight:600; cursor:pointer; }
+    button:hover { opacity:0.95; }
+    .helper { font-size:12px; color:#777; }
+    .section-title { margin-top:24px; font-weight:700; font-size:14px; text-transform:uppercase; color:#555; }
+.logo { 
+  font-weight:800; 
+  letter-spacing:0.05em; 
+  font-size:13px; 
+  text-transform:uppercase; 
+  color:#0070C9; 
+}
+.tagline {
+  font-size: 12px;
+  color: #444;
+  font-weight: 500;
+  margin-top: 2px;
+  margin-bottom: 14px;
+  text-align:center;
+  font-style:italic; opacity:0.8;
+}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">HAWKINS PRO MOUNTING</div>
+    <div class="tagline">Professional. Precise. Protected.</div>
+    <h1>Instant Mounting & Install Quote</h1>
+    <p>Choose your service and answer a few quick questions to see your estimated price (tax included) before we arrive.</p>
+
+    <form method="post" action="/quote-html">
+      <!-- Service selection -->
+      <label>Which Service Do You Need?</label>
+      <select name="service" id="service-select" required>
+        <option value="tv_mounting">TV Mounting</option>
+        <option value="picture_hanging">Picture Hanging</option>
+        <option value="floating_shelves">Floating Shelves</option>
+        <option value="closet_organizers">Closet Organizers</option>
+        <option value="decor">Décor / Art & Mirror Arrangement</option>
+      </select>
+
+      <div class="section-title">Common Details</div>
+
+      <label>Wall Type</label>
+      <select name="wall_type" required>
+        <option value="drywall">Drywall</option>
+        <option value="plaster">Plaster</option>
+        <option value="brick">Brick</option>
+        <option value="tile">Tile / Stone Fireplace</option>
+      </select>
+
+      <label>Number of Items (TVs, Pictures, Shelves, Sections)</label>
+      <input type="number" name="picture_count" min="0" value="1">
+
+      <!-- TV-specific block -->
+      <div id="tv-section">
+        <div class="section-title">TV Mounting Details</div>
+
+        <label>TV Size (inches)</label>
+        <input type="number" name="tv_size" min="20" max="85">
+
+        <label>Wire Concealment</label>
+        <select name="conceal_type">
+          <option value="none">No wire hiding</option>
+          <option value="raceway">Raceway (surface channel)</option>
+          <option value="inwall">In-wall concealment</option>
+        </select>
+
+        <label>Soundbar Mounting?</label>
+        <select name="soundbar">
+          <option value="false">No</option>
+          <option value="true">Yes</option>
+        </select>
+
+        <label>LED Strip Behind TV?</label>
+        <select name="led">
+          <option value="false">No</option>
+          <option value="true">Yes</option>
+        </select>
+      </div>
+
+      <div class="section-title">Extras & Timing</div>
+
+      <label>Floating Shelves on This Job?</label>
+      <select name="shelves">
+        <option value="false">No</option>
+        <option value="true">Yes</option>
+      </select>
+
+      <label>Same-Day / Priority?</label>
+      <select name="same_day">
+        <option value="false">No</option>
+        <option value="true">Yes</option>
+      </select>
+
+      <label>After 7 PM?</label>
+      <select name="after_hours">
+        <option value="false">No</option>
+        <option value="true">Yes</option>
+      </select>
+
+      <label>ZIP Code</label>
+      <input type="text" name="zip_code" value="20735" required>
+      <div class="helper">Currently quoting within ~25 miles of 20735.</div>
+
+      <button type="submit">Get My Instant Quote</button>
+    </form>
+  </div>
+
+  <script>
+    function updateServiceVisibility() {
+      const service = document.getElementById('service-select').value;
+      const tvSection = document.getElementById('tv-section');
+
+      if (service === 'tv_mounting') {
+        tvSection.style.display = 'block';
+      } else {
+        tvSection.style.display = 'none';
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      const serviceSelect = document.getElementById('service-select');
+      serviceSelect.addEventListener('change', updateServiceVisibility);
+      updateServiceVisibility();
+    });
+  </script>
+</body>
+</html>

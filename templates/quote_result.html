@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Your Mounting Quote - Hawkins Pro Mounting</title>
+  <style>
+    body { font-family:-apple-system, BlinkMacSystemFont, sans-serif; background:#f0f2f5; margin:0; padding:0; }
+    .shell { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
+    .card { max-width:640px; width:100%; background:#fff; padding:24px 24px 28px; border-radius:20px; box-shadow:0 14px 35px rgba(0,0,0,0.08); }
+    .brand-row { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
+    .logo { font-weight:800; letter-spacing:0.05em; font-size:13px; text-transform:uppercase; color:#0070C9; }
+    .pill { font-size:11px; padding:3px 9px; border-radius:999px; background:#f0f4ff; color:#264b7f; }
+    h1 { font-size:22px; margin:4px 0 4px; }
+    p { color:#555; margin-top:4px; font-size:14px; }
+    .line-items { margin-top:16px; font-size:14px; border-top:1px solid #eee; padding-top:10px; }
+    .line-items-row { display:flex; justify-content:space-between; margin-bottom:6px; }
+    .muted { color:#777; font-size:12px; }
+    .total-box { margin-top:16px; padding:14px 14px 12px; border-radius:14px; background:#f5f9ff; border:1px solid #d4e3ff; }
+    .total-label { font-size:12px; text-transform:uppercase; letter-spacing:0.06em; color:#4b6aa6; }
+    .total-amount { font-size:24px; font-weight:800; margin-top:4px; }
+    .tag-row { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; }
+    .tag { display:inline-flex; align-items:center; padding:3px 9px; border-radius:999px; font-size:11px; background:#edf2ff; color:#364fc7; }
+    .tag-dot { width:6px; height:6px; border-radius:999px; background:#00c853; margin-right:6px; }
+    .buttons { display:flex; flex-direction:column; gap:10px; margin-top:22px; }
+    .btn { text-align:center; padding:12px; border-radius:999px; font-weight:600; text-decoration:none; display:block; font-size:15px; }
+    .btn-primary { background:#0070C9; color:#fff; box-shadow:0 4px 10px rgba(0,112,201,0.28); }
+    .btn-primary:hover { filter:brightness(0.96); }
+    .btn-secondary { background:#f3f3f3; color:#333; border:1px solid #ddd; }
+    .btn-secondary:hover { background:#e9e9e9; }
+    .footnote { font-size:11px; color:#777; margin-top:14px; line-height:1.4; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="card">
+      <div class="brand-row">
+        <div>
+          <div class="logo">HAWKINS PRO MOUNTING</div>
+          <h1>Your Instant Quote</h1>
+        </div>
+        <div class="pill">No surprise charges</div>
+      </div>
+
+      <p>Here’s your estimated price based on the details you provided. This includes estimated tax for your service area.</p>
+
+      <div class="line-items">
+        <div class="line-items-row">
+          <span>Base Service</span>
+          <span>${{ line_items.base_mounting }}</span>
+        </div>
+        <div class="line-items-row">
+          <span>Wall Type Adjustment</span>
+          <span>${{ line_items.wall_type_adjustment }}</span>
+        </div>
+        <div class="line-items-row">
+          <span>Wire Concealment</span>
+          <span>${{ line_items.wire_concealment }}</span>
+        </div>
+        <div class="line-items-row">
+          <span>Add-Ons</span>
+          <span>${{ line_items.addons }}</span>
+        </div>
+        <div class="line-items-row muted">
+          <span>Multi-Service Discount</span>
+          <span>${{ line_items.multi_service_discount }}</span>
+        </div>
+      </div>
+
+      <div class="total-box">
+        <div class="total-label">Estimated total (tax included)</div>
+        <div class="total-amount">${{ estimated_total_with_tax }}</div>
+        <div class="tag-row">
+          <div class="tag">
+            <span class="tag-dot"></span>
+            Tax rate applied: {{ (tax_rate * 100) | round(2) }}%
+          </div>
+          <div class="tag">Within ~25 miles of 20735</div>
+        </div>
+      </div>
+
+      <div class="buttons">
+        <!-- Replace this href with your actual booking link -->
+        <a href="https://hawkinspromounting.squarespace.com/consultation" class="btn btn-primary" target="_blank">
+  	Book This Install
+	</a>
+
+
+        <!-- Replace this email + subject with your real info -->
+        <a href="mailto:info@hawkinspromounting.com?subject=Question about my mounting/installation quote"
+           class="btn btn-secondary">
+          Ask a Question First
+        </a>
+      </div>
+
+      <div class="footnote">
+        This is an estimate based on typical installations within ~25 miles of ZIP 20735. 
+        Final pricing may adjust slightly based on on-site conditions (stud locations, wall material, existing damage, or special requests).
+      </div>
+    </div>
+  </div>
+</body>
+</html>
