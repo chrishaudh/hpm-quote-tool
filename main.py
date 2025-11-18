@@ -1,7 +1,7 @@
 from typing import Optional
 from datetime import datetime
 
-from fastapi import FastAPI, Request, Form
+from fastapi import FastAPI, Request, Form, BackgroundTasks
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -15,7 +15,7 @@ app = FastAPI(title="Hawkins Pro Mounting Quote API")
 templates = Jinja2Templates(directory="templates")
 
 # Your real Zapier webhook URL
-ZAPIER_WEBHOOK_URL = "https://hooks.zapier.com/hooks/catch/25408903/uzyun2p/"
+ZAPIER_WEBHOOK_URL = "https://hooks.zapier.com/hooks/catch/25408903/uz2ihgh/"
 
 
 class QuoteRequest(BaseModel):
@@ -39,9 +39,9 @@ class QuoteRequest(BaseModel):
 
 
 def send_lead_to_zapier(
-    contact_name: str,
-    contact_phone: str,
-    contact_email: str,
+    contact_name: Optional[str],
+    contact_phone: Optional[str],
+    contact_email: Optional[str],
     service: str,
     tv_size: int,
     wall_type: str,
@@ -50,47 +50,93 @@ def send_lead_to_zapier(
     same_day: bool,
     after_hours: bool,
     zip_code: str,
+    booking_url: str,
     quote_result: dict,
 ) -> None:
     """
-    Fire-and-forget: send lead + quote data to Zapier for logging in Google Sheets.
-    Failures here should NEVER break the user experience, but we log them for debugging.
+    Send lead + quote data to Zapier for logging in Google Sheets and triggering
+    email/SMS flows. Failures here should NEVER break the user experience.
     """
 
     if not ZAPIER_WEBHOOK_URL:
         print("ZAPIER_WEBHOOK_URL is empty; skipping Zapier send")
         return
 
-    payload = {
-        "timestamp": datetime.utcnow().isoformat(),
-        "contact_name": contact_name,
-        "contact_phone": contact_phone,
-        "contact_email": contact_email,
-        "zip_code": zip_code,
-        "service": service,
-        "tv_size": tv_size,
-        "wall_type": wall_type,
-        "conceal_type": conceal_type,
-        "items_count": picture_count,
-        "same_day": same_day,
-        "after_hours": after_hours,
-        "base_mounting": quote_result["line_items"]["base_mounting"],
-        "wall_type_adjustment": quote_result["line_items"]["wall_type_adjustment"],
-        "wire_concealment": quote_result["line_items"]["wire_concealment"],
-        "addons": quote_result["line_items"]["addons"],
-        "multi_service_discount": quote_result["line_items"]["multi_service_discount"],
-        "tax_rate": quote_result["tax_rate"],
-        "subtotal_before_tax": quote_result["subtotal_before_tax"],
-        "estimated_total_with_tax": quote_result["estimated_total_with_tax"],
-    }
-
     try:
+        line_items = quote_result.get("line_items", {}) or {}
+
+        payload = {
+            "timestamp": datetime.utcnow().isoformat(),
+
+            # Contact info
+            "contact_name": contact_name or "",
+            "contact_phone": contact_phone or "",
+            "contact_email": contact_email or "",
+            "zip_code": zip_code,
+
+            # Job details
+            "service": service,
+            "tv_size": tv_size,
+            "wall_type": wall_type,
+            "conceal_type": conceal_type,
+            "items_count": picture_count,
+            "same_day": same_day,
+            "after_hours": after_hours,
+
+            # Booking
+            "booking_url": booking_url,
+
+            # Quote breakdown (defensive .get's so missing keys don't crash)
+            "base_mounting": line_items.get("base_mounting", 0),
+            "wall_type_adjustment": line_items.get("wall_type_adjustment", 0),
+            "wire_concealment": line_items.get("wire_concealment", 0),
+            "addons": line_items.get("addons", 0),
+            "multi_service_discount": line_items.get("multi_service_discount", 0),
+            "tax_rate": quote_result.get("tax_rate", 0),
+            "subtotal_before_tax": quote_result.get("subtotal_before_tax", 0),
+            "estimated_total_with_tax": quote_result.get("estimated_total_with_tax", 0),
+        }
+
+        # Debug: see exactly what we send to Zapier
+        print("📤 Payload sending to Zapier:")
+        print(payload)
+
         resp = requests.post(ZAPIER_WEBHOOK_URL, json=payload, timeout=5)
         resp.raise_for_status()
         print("✅ Lead sent to Zapier successfully")
+
     except Exception as e:
         # Log the error but don't crash the app
         print(f"❌ Error sending lead to Zapier: {e}")
+
+
+def build_booking_url(
+    contact_name: str,
+    contact_email: str,
+    contact_phone: str,
+    service: str,
+) -> str:
+    """
+    Simple helper to create a booking link.
+    Replace this with your real scheduling URL (Calendly, etc.)
+    """
+    base_url = "https://calendly.com/hawkins-pro-mounting/quote"
+
+    # Basic query string (you can remove this if you don't care about pre-fill)
+    # NOTE: not fully URL-encoded on purpose to keep it simple
+    params = []
+    if contact_name:
+        params.append(f"name={contact_name}")
+    if contact_email:
+        params.append(f"email={contact_email}")
+    if contact_phone:
+        params.append(f"phone={contact_phone}")
+    if service:
+        params.append(f"service={service}")
+
+    if params:
+        return f"{base_url}?{'&'.join(params)}"
+    return base_url
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -101,6 +147,7 @@ def show_form(request: Request):
 @app.post("/quote-html", response_class=HTMLResponse)
 async def quote_html(
     request: Request,
+    background_tasks: BackgroundTasks,
     contact_name: str = Form(""),
     contact_phone: str = Form(""),
     contact_email: str = Form(""),
@@ -119,6 +166,7 @@ async def quote_html(
     def to_bool(value: str) -> bool:
         return str(value).lower() == "true"
 
+    # 1) Calculate the quote
     result = calculate_quote(
         service=service,
         tv_size=tv_size,
@@ -133,22 +181,33 @@ async def quote_html(
         zip_code=zip_code,
     )
 
-    # Log to Zapier (non-blocking from UX perspective)
-    send_lead_to_zapier(
+    # 2) Build booking URL for this quote
+    booking_url = build_booking_url(
         contact_name=contact_name,
-        contact_phone=contact_phone,
         contact_email=contact_email,
+        contact_phone=contact_phone,
         service=service,
-        tv_size=tv_size,
-        wall_type=wall_type,
-        conceal_type=conceal_type,
-        picture_count=picture_count,
-        same_day=to_bool(same_day),
-        after_hours=to_bool(after_hours),
-        zip_code=zip_code,
-        quote_result=result,
     )
 
+    # 3) Schedule Zapier send in the background (non-blocking)
+    background_tasks.add_task(
+        send_lead_to_zapier,
+        contact_name,
+        contact_phone,
+        contact_email,
+        service,
+        tv_size,
+        wall_type,
+        conceal_type,
+        picture_count,
+        to_bool(same_day),
+        to_bool(after_hours),
+        zip_code,
+        booking_url,
+        result,
+    )
+
+    # 4) Render HTML result page
     return templates.TemplateResponse(
         "quote_result.html",
         {
@@ -156,11 +215,49 @@ async def quote_html(
             "contact_name": contact_name,
             "contact_phone": contact_phone,
             "contact_email": contact_email,
+            "booking_url": booking_url,
             **result,
         },
     )
 
 
 @app.post("/quote")
-def get_quote(request_data: QuoteRequest):
-    return calculate_quote(**request_data.dict())
+def get_quote(request_data: QuoteRequest, background_tasks: BackgroundTasks):
+    """
+    JSON API version of the quote endpoint.
+    This also logs to Zapier in the background.
+    """
+    # 1) Calculate the quote
+    result = calculate_quote(**request_data.dict())
+
+    # 2) Build booking URL (may be blank if contact info is missing)
+    booking_url = build_booking_url(
+        contact_name=request_data.contact_name or "",
+        contact_email=request_data.contact_email or "",
+        contact_phone=request_data.contact_phone or "",
+        service=request_data.service,
+    )
+
+    # 3) Schedule Zapier send in the background
+    background_tasks.add_task(
+        send_lead_to_zapier,
+        request_data.contact_name,
+        request_data.contact_phone,
+        request_data.contact_email,
+        request_data.service,
+        request_data.tv_size,
+        request_data.wall_type,
+        request_data.conceal_type,
+        request_data.picture_count,
+        request_data.same_day,
+        request_data.after_hours,
+        request_data.zip_code,
+        booking_url,
+        result,
+    )
+
+    # 4) Return JSON with quote + booking URL
+    return {
+        **result,
+        "booking_url": booking_url,
+    }
