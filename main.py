@@ -1,16 +1,44 @@
-import requests
-from datetime import datetime
+from typing import Optional
+
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
+from datetime import datetime
+
 from quote_logic import calculate_quote
+
+# Try to import requests safely so the app doesn't crash if it's missing
+try:
+    import requests
+except ImportError:
+    requests = None
 
 app = FastAPI(title="Hawkins Pro Mounting Quote API")
 
 templates = Jinja2Templates(directory="templates")
 
-ZAPIER_WEBHOOK_URL = "https://hooks.zapier.com/hooks/catch/25408903/uzyun2p/"
+# TODO: paste your real Zapier webhook URL here when ready
+ZAPIER_WEBHOOK_URL = "https://hooks.zapier.com/hooks/catch/YOUR/WEBHOOK/URL"
+
+
+class QuoteRequest(BaseModel):
+    # Contact info (for JSON API; HTML form uses same field names)
+    contact_name: Optional[str] = None
+    contact_phone: Optional[str] = None
+
+    # Service details
+    service: str = "tv_mounting"
+    tv_size: int = 0
+    wall_type: str = "drywall"
+    conceal_type: str = "none"
+    soundbar: bool = False
+    shelves: bool = False
+    picture_count: int = 0
+    led: bool = False
+    same_day: bool = False
+    after_hours: bool = False
+    zip_code: str = "20735"
 
 
 def send_lead_to_zapier(
@@ -25,13 +53,15 @@ def send_lead_to_zapier(
     after_hours: bool,
     zip_code: str,
     quote_result: dict,
-):
+) -> None:
     """
     Fire-and-forget: send lead + quote data to Zapier for logging in Google Sheets.
     Failures here should NEVER break the user experience.
     """
+    # If we don't have requests or webhook not configured, just skip
+    if requests is None:
+        return
     if not ZAPIER_WEBHOOK_URL or "YOUR/WEBHOOK/URL" in ZAPIER_WEBHOOK_URL:
-        # Not configured yet; skip silently
         return
 
     payload = {
@@ -59,28 +89,8 @@ def send_lead_to_zapier(
     try:
         requests.post(ZAPIER_WEBHOOK_URL, json=payload, timeout=3)
     except Exception:
-        # We don't care about errors here; logging could be added later
+        # Don't let Zapier failures ever break the app
         pass
-
-
-
-class QuoteRequest(BaseModel):
-    # Contact info (for JSON API; HTML form uses same field names)
-    contact_name: str | None = None
-    contact_phone: str | None = None
-
-    # Service details
-    service: str = "tv_mounting"
-    tv_size: int = 0
-    wall_type: str = "drywall"
-    conceal_type: str = "none"
-    soundbar: bool = False
-    shelves: bool = False
-    picture_count: int = 0
-    led: bool = False
-    same_day: bool = False
-    after_hours: bool = False
-    zip_code: str = "20735"
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -122,7 +132,7 @@ async def quote_html(
         zip_code=zip_code,
     )
 
- # Send lead + quote to Zapier for logging
+    # Fire-and-forget lead logging (won't break if it fails)
     send_lead_to_zapier(
         contact_name=contact_name,
         contact_phone=contact_phone,
