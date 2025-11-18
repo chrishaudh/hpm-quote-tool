@@ -1,25 +1,21 @@
 from typing import Optional
+from datetime import datetime
 
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
-from datetime import datetime
+
+import requests  # <- require this; make sure it's in requirements.txt
 
 from quote_logic import calculate_quote
-
-# Try to import requests safely so the app doesn't crash if it's missing
-try:
-    import requests
-except ImportError:
-    requests = None
 
 app = FastAPI(title="Hawkins Pro Mounting Quote API")
 
 templates = Jinja2Templates(directory="templates")
 
-# TODO: paste your real Zapier webhook URL here when ready
-ZAPIER_WEBHOOK_URL = "https://hooks.zapier.com/hooks/catch/YOUR/WEBHOOK/URL"
+# Your real Zapier webhook URL
+ZAPIER_WEBHOOK_URL = "https://hooks.zapier.com/hooks/catch/25408903/uzyun2p/"
 
 
 class QuoteRequest(BaseModel):
@@ -56,12 +52,11 @@ def send_lead_to_zapier(
 ) -> None:
     """
     Fire-and-forget: send lead + quote data to Zapier for logging in Google Sheets.
-    Failures here should NEVER break the user experience.
+    Failures here should NEVER break the user experience, but we log them for debugging.
     """
-    # If we don't have requests or webhook not configured, just skip
-    if requests is None:
-        return
-    if not ZAPIER_WEBHOOK_URL or "YOUR/WEBHOOK/URL" in ZAPIER_WEBHOOK_URL:
+
+    if not ZAPIER_WEBHOOK_URL:
+        print("ZAPIER_WEBHOOK_URL is empty; skipping Zapier send")
         return
 
     payload = {
@@ -87,10 +82,12 @@ def send_lead_to_zapier(
     }
 
     try:
-        requests.post(ZAPIER_WEBHOOK_URL, json=payload, timeout=3)
-    except Exception:
-        # Don't let Zapier failures ever break the app
-        pass
+        resp = requests.post(ZAPIER_WEBHOOK_URL, json=payload, timeout=5)
+        resp.raise_for_status()
+        print("✅ Lead sent to Zapier successfully")
+    except Exception as e:
+        # Log the error but don't crash the app
+        print(f"❌ Error sending lead to Zapier: {e}")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -132,7 +129,7 @@ async def quote_html(
         zip_code=zip_code,
     )
 
-    # Fire-and-forget lead logging (won't break if it fails)
+    # Log to Zapier (non-blocking from UX perspective)
     send_lead_to_zapier(
         contact_name=contact_name,
         contact_phone=contact_phone,
