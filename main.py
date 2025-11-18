@@ -6,7 +6,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-import requests  # <- require this; make sure it's in requirements.txt
+import requests  # make sure this is in requirements.txt
 
 from quote_logic import calculate_quote
 
@@ -22,6 +22,7 @@ class QuoteRequest(BaseModel):
     # Contact info (for JSON API; HTML form uses same field names)
     contact_name: Optional[str] = None
     contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
 
     # Service details
     service: str = "tv_mounting"
@@ -40,6 +41,7 @@ class QuoteRequest(BaseModel):
 def send_lead_to_zapier(
     contact_name: str,
     contact_phone: str,
+    contact_email: str,
     service: str,
     tv_size: int,
     wall_type: str,
@@ -63,6 +65,7 @@ def send_lead_to_zapier(
         "timestamp": datetime.utcnow().isoformat(),
         "contact_name": contact_name,
         "contact_phone": contact_phone,
+        "contact_email": contact_email,
         "zip_code": zip_code,
         "service": service,
         "tv_size": tv_size,
@@ -100,6 +103,7 @@ async def quote_html(
     request: Request,
     contact_name: str = Form(""),
     contact_phone: str = Form(""),
+    contact_email: str = Form(""),
     service: str = Form("tv_mounting"),
     tv_size: int = Form(0),
     wall_type: str = Form("drywall"),
@@ -133,6 +137,7 @@ async def quote_html(
     send_lead_to_zapier(
         contact_name=contact_name,
         contact_phone=contact_phone,
+        contact_email=contact_email,
         service=service,
         tv_size=tv_size,
         wall_type=wall_type,
@@ -150,6 +155,7 @@ async def quote_html(
             "request": request,
             "contact_name": contact_name,
             "contact_phone": contact_phone,
+            "contact_email": contact_email,
             **result,
         },
     )
