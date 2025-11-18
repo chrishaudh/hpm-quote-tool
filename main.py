@@ -1,3 +1,5 @@
+import requests
+from datetime import datetime
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -7,6 +9,59 @@ from quote_logic import calculate_quote
 app = FastAPI(title="Hawkins Pro Mounting Quote API")
 
 templates = Jinja2Templates(directory="templates")
+
+ZAPIER_WEBHOOK_URL = "https://hooks.zapier.com/hooks/catch/25408903/uzyun2p/"
+
+
+def send_lead_to_zapier(
+    contact_name: str,
+    contact_phone: str,
+    service: str,
+    tv_size: int,
+    wall_type: str,
+    conceal_type: str,
+    picture_count: int,
+    same_day: bool,
+    after_hours: bool,
+    zip_code: str,
+    quote_result: dict,
+):
+    """
+    Fire-and-forget: send lead + quote data to Zapier for logging in Google Sheets.
+    Failures here should NEVER break the user experience.
+    """
+    if not ZAPIER_WEBHOOK_URL or "YOUR/WEBHOOK/URL" in ZAPIER_WEBHOOK_URL:
+        # Not configured yet; skip silently
+        return
+
+    payload = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "contact_name": contact_name,
+        "contact_phone": contact_phone,
+        "zip_code": zip_code,
+        "service": service,
+        "tv_size": tv_size,
+        "wall_type": wall_type,
+        "conceal_type": conceal_type,
+        "items_count": picture_count,
+        "same_day": same_day,
+        "after_hours": after_hours,
+        "base_mounting": quote_result["line_items"]["base_mounting"],
+        "wall_type_adjustment": quote_result["line_items"]["wall_type_adjustment"],
+        "wire_concealment": quote_result["line_items"]["wire_concealment"],
+        "addons": quote_result["line_items"]["addons"],
+        "multi_service_discount": quote_result["line_items"]["multi_service_discount"],
+        "tax_rate": quote_result["tax_rate"],
+        "subtotal_before_tax": quote_result["subtotal_before_tax"],
+        "estimated_total_with_tax": quote_result["estimated_total_with_tax"],
+    }
+
+    try:
+        requests.post(ZAPIER_WEBHOOK_URL, json=payload, timeout=3)
+    except Exception:
+        # We don't care about errors here; logging could be added later
+        pass
+
 
 
 class QuoteRequest(BaseModel):
@@ -65,6 +120,21 @@ async def quote_html(
         same_day=to_bool(same_day),
         after_hours=to_bool(after_hours),
         zip_code=zip_code,
+    )
+
+ # Send lead + quote to Zapier for logging
+    send_lead_to_zapier(
+        contact_name=contact_name,
+        contact_phone=contact_phone,
+        service=service,
+        tv_size=tv_size,
+        wall_type=wall_type,
+        conceal_type=conceal_type,
+        picture_count=picture_count,
+        same_day=to_bool(same_day),
+        after_hours=to_bool(after_hours),
+        zip_code=zip_code,
+        quote_result=result,
     )
 
     return templates.TemplateResponse(
