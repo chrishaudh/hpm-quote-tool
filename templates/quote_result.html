@@ -41,7 +41,15 @@
         <div class="pill">No surprise charges</div>
       </div>
 
-      <p>Here’s your estimated price based on the details you provided. This includes estimated tax for your service area.</p>
+     <p>
+  {% if contact_name and contact_name.strip() %}
+    Thanks, {{ contact_name }}. 
+  {% else %}
+    Thanks.
+  {% endif %}
+  Here’s your estimated price based on the details you provided. This includes estimated tax for your service area.
+</p>
+
 
       <div class="line-items">
         <div class="line-items-row">

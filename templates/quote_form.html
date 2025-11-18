@@ -4,118 +4,268 @@
   <meta charset="UTF-8">
   <title>Hawkins Pro Mounting - Instant Quote</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background:#f5f5f5; margin:0; padding:0; }
-    .container { max-width: 600px; margin: 40px auto; background:#fff; padding:24px; border-radius:16px; box-shadow:0 4px 12px rgba(0,0,0,0.06); }
-    h1 { font-size: 24px; margin-bottom: 8px; }
-    p { color:#555; margin-top:0; }
-    label { display:block; margin-top:16px; font-weight:600; }
-    select, input { width:100%; padding:8px 10px; margin-top:6px; border-radius:8px; border:1px solid #ccc; }
-    button { margin-top:24px; width:100%; padding:12px; border:none; border-radius:999px; background:#0070C9; color:#fff; font-size:16px; font-weight:600; cursor:pointer; }
-    button:hover { opacity:0.95; }
-    .helper { font-size:12px; color:#777; }
-    .section-title { margin-top:24px; font-weight:700; font-size:14px; text-transform:uppercase; color:#555; }
-.logo { 
-  font-weight:800; 
-  letter-spacing:0.05em; 
-  font-size:13px; 
-  text-transform:uppercase; 
-  color:#0070C9; 
-}
-.tagline {
-  font-size: 12px;
-  color: #444;
-  font-weight: 500;
-  margin-top: 2px;
-  margin-bottom: 14px;
-  text-align:center;
-  font-style:italic; opacity:0.8;
-}
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      background:#f5f5f5;
+      margin:0;
+      padding:0;
+    }
+    .shell {
+      min-height:100vh;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:24px;
+    }
+    .container {
+      max-width: 600px;
+      width:100%;
+      background:#fff;
+      padding:24px 24px 28px;
+      border-radius:16px;
+      box-shadow:0 4px 16px rgba(0,0,0,0.06);
+    }
+    .logo {
+      font-weight:800;
+      letter-spacing:0.05em;
+      font-size:13px;
+      text-transform:uppercase;
+      color:#0070C9;
+    }
+    .tagline {
+      font-size:12px;
+      color:#444;
+      font-weight:500;
+      margin-top:2px;
+      margin-bottom:14px;
+    }
+    h1 {
+      font-size: 22px;
+      margin-bottom: 6px;
+    }
+    p {
+      color:#555;
+      margin-top:0;
+      font-size:14px;
+    }
+    label {
+      display:block;
+      margin-top:16px;
+      font-weight:600;
+      font-size:14px;
+    }
+    select, input {
+      width:100%;
+      padding:8px 10px;
+      margin-top:6px;
+      border-radius:8px;
+      border:1px solid #ccc;
+      font-size:14px;
+    }
+    button {
+      margin-top:24px;
+      width:100%;
+      padding:12px;
+      border:none;
+      border-radius:999px;
+      background:#0070C9;
+      color:#fff;
+      font-size:16px;
+      font-weight:600;
+      cursor:pointer;
+    }
+    button:hover {
+      opacity:0.95;
+    }
+    .helper {
+      font-size:12px;
+      color:#777;
+    }
+    .section-title {
+      margin-top:24px;
+      font-weight:700;
+      font-size:13px;
+      text-transform:uppercase;
+      color:#555;
+    }
+    .step-indicator {
+      display:flex;
+      gap:8px;
+      font-size:12px;
+      margin-bottom:12px;
+      color:#666;
+      align-items:center;
+    }
+    .step-dot {
+      width:18px;
+      height:18px;
+      border-radius:999px;
+      border:1px solid #ccc;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:11px;
+    }
+    .step-dot.active {
+      background:#0070C9;
+      color:#fff;
+      border-color:#0070C9;
+    }
+    .step-label {
+      font-weight:600;
+    }
+    .step {
+      display:none;
+      animation: fadeIn 0.2s ease-out;
+    }
+    .step.active {
+      display:block;
+    }
+    .secondary-button {
+      margin-top:10px;
+      width:100%;
+      padding:10px;
+      border-radius:999px;
+      border:1px solid #ddd;
+      background:#f5f5f5;
+      font-size:14px;
+      font-weight:500;
+      cursor:pointer;
+    }
+    .secondary-button:hover {
+      background:#ececec;
+    }
+    .error-text {
+      margin-top:8px;
+      font-size:12px;
+      color:#c62828;
+      display:none;
+    }
+    @keyframes fadeIn {
+      from { opacity:0; transform:translateY(4px); }
+      to { opacity:1; transform:translateY(0); }
+    }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="logo">HAWKINS PRO MOUNTING</div>
-    <div class="tagline">Professional. Precise. Protected.</div>
-    <h1>Instant Mounting & Install Quote</h1>
-    <p>Choose your service and answer a few quick questions to see your estimated price (tax included) before we arrive.</p>
+  <div class="shell">
+    <div class="container">
+      <div class="logo">HAWKINS PRO MOUNTING</div>
+      <div class="tagline">Professional. Precise. Protected.</div>
 
-    <form method="post" action="/quote-html">
-      <!-- Service selection -->
-      <label>Which Service Do You Need?</label>
-      <select name="service" id="service-select" required>
-        <option value="tv_mounting">TV Mounting</option>
-        <option value="picture_hanging">Picture Hanging</option>
-        <option value="floating_shelves">Floating Shelves</option>
-        <option value="closet_organizers">Closet Organizers</option>
-        <option value="decor">Décor / Art & Mirror Arrangement</option>
-      </select>
-
-      <div class="section-title">Common Details</div>
-
-      <label>Wall Type</label>
-      <select name="wall_type" required>
-        <option value="drywall">Drywall</option>
-        <option value="plaster">Plaster</option>
-        <option value="brick">Brick</option>
-        <option value="tile">Tile / Stone Fireplace</option>
-      </select>
-
-      <label>Number of Items (TVs, Pictures, Shelves, Sections)</label>
-      <input type="number" name="picture_count" min="0" value="1">
-
-      <!-- TV-specific block -->
-      <div id="tv-section">
-        <div class="section-title">TV Mounting Details</div>
-
-        <label>TV Size (inches)</label>
-        <input type="number" name="tv_size" min="20" max="85">
-
-        <label>Wire Concealment</label>
-        <select name="conceal_type">
-          <option value="none">No wire hiding</option>
-          <option value="raceway">Raceway (surface channel)</option>
-          <option value="inwall">In-wall concealment</option>
-        </select>
-
-        <label>Soundbar Mounting?</label>
-        <select name="soundbar">
-          <option value="false">No</option>
-          <option value="true">Yes</option>
-        </select>
-
-        <label>LED Strip Behind TV?</label>
-        <select name="led">
-          <option value="false">No</option>
-          <option value="true">Yes</option>
-        </select>
+      <div class="step-indicator">
+        <div class="step-dot active" id="dot-step1">1</div>
+        <div class="step-label">Step 1: Contact Info</div>
       </div>
 
-      <div class="section-title">Extras & Timing</div>
+      <form method="post" action="/quote-html" id="quote-form">
+        <!-- STEP 1: CONTACT INFO -->
+        <div class="step active" id="step1">
+          <h1>Let’s Start Your Quote</h1>
+          <p>Tell us who and where you are so we can confirm service area and send updates about your quote.</p>
 
-      <label>Floating Shelves on This Job?</label>
-      <select name="shelves">
-        <option value="false">No</option>
-        <option value="true">Yes</option>
-      </select>
+          <label>Your Name</label>
+          <input type="text" name="contact_name" id="contact_name" required>
 
-      <label>Same-Day / Priority?</label>
-      <select name="same_day">
-        <option value="false">No</option>
-        <option value="true">Yes</option>
-      </select>
+          <label>Mobile Number</label>
+          <input type="tel" name="contact_phone" id="contact_phone" required placeholder="(xxx) xxx-xxxx">
 
-      <label>After 7 PM?</label>
-      <select name="after_hours">
-        <option value="false">No</option>
-        <option value="true">Yes</option>
-      </select>
+          <label>ZIP Code</label>
+          <input type="text" name="zip_code" id="zip_code" value="20735" required>
 
-      <label>ZIP Code</label>
-      <input type="text" name="zip_code" value="20735" required>
-      <div class="helper">Currently quoting within ~25 miles of 20735.</div>
+          <div class="helper">Currently quoting within ~25 miles of ZIP 20735.</div>
 
-      <button type="submit">Get My Instant Quote</button>
-    </form>
+          <div id="contact-error" class="error-text">
+            Please fill in your name, mobile number, and ZIP code to continue.
+          </div>
+
+          <button type="button" onclick="goToStep2()">Continue to Service Details</button>
+        </div>
+
+        <!-- STEP 2: SERVICE DETAILS -->
+        <div class="step" id="step2">
+          <div class="step-indicator" style="margin-bottom:4px;">
+            <div class="step-dot" id="dot-step2">2</div>
+            <div class="step-label">Step 2: Service Details</div>
+          </div>
+
+          <h1>What Do You Need Done?</h1>
+          <p>Choose your service and add a few details so we can calculate your estimated price.</p>
+
+          <label>Which Service Do You Need?</label>
+          <select name="service" id="service-select" required>
+            <option value="tv_mounting">TV Mounting</option>
+            <option value="picture_hanging">Picture Hanging</option>
+            <option value="floating_shelves">Floating Shelves</option>
+            <option value="closet_organizers">Closet Organizers</option>
+            <option value="decor">Décor / Art & Mirror Arrangement</option>
+          </select>
+
+          <div class="section-title">Common Details</div>
+
+          <label>Wall Type</label>
+          <select name="wall_type" required>
+            <option value="drywall">Drywall</option>
+            <option value="plaster">Plaster</option>
+            <option value="brick">Brick</option>
+            <option value="tile">Tile / Stone Fireplace</option>
+          </select>
+
+          <label>Number of Items (TVs, Pictures, Shelves, Sections)</label>
+          <input type="number" name="picture_count" min="1" value="1">
+
+          <!-- TV-specific block -->
+          <div id="tv-section">
+            <div class="section-title">TV Mounting Details</div>
+
+            <label>TV Size (inches)</label>
+            <input type="number" name="tv_size" min="20" max="85">
+
+            <label>Wire Concealment</label>
+            <select name="conceal_type">
+              <option value="none">No wire hiding</option>
+              <option value="raceway">Raceway (surface channel)</option>
+              <option value="inwall">In-wall concealment</option>
+            </select>
+
+            <label>Soundbar Mounting?</label>
+            <select name="soundbar">
+              <option value="false">No</option>
+              <option value="true">Yes</option>
+            </select>
+
+            <label>LED Strip Behind TV?</label>
+            <select name="led">
+              <option value="false">No</option>
+              <option value="true">Yes</option>
+            </select>
+          </div>
+
+          <div class="section-title">Extras & Timing</div>
+
+          <label>Floating Shelves on This Job?</label>
+          <select name="shelves">
+            <option value="false">No</option>
+            <option value="true">Yes</option>
+          </select>
+
+          <label>Same-Day / Priority?</label>
+          <select name="same_day">
+            <option value="false">No</option>
+            <option value="true">Yes</option>
+          </select>
+
+          <label>After 7 PM?</label>
+          <select name="after_hours">
+            <option value="false">No</option>
+            <option value="true">Yes</option>
+          </select>
+
+          <button type="submit">Get My Instant Quote</button>
+          <button type="button" class="secondary-button" onclick="backToStep1()">← Back to Contact Info</button>
+        </div>
+      </form>
+    </div>
   </div>
 
   <script>
@@ -128,6 +278,36 @@
       } else {
         tvSection.style.display = 'none';
       }
+    }
+
+    function goToStep2() {
+      const name = document.getElementById('contact_name').value.trim();
+      const phone = document.getElementById('contact_phone').value.trim();
+      const zip = document.getElementById('zip_code').value.trim();
+      const errorEl = document.getElementById('contact-error');
+
+      if (!name || !phone || !zip) {
+        errorEl.style.display = 'block';
+        return;
+      } else {
+        errorEl.style.display = 'none';
+      }
+
+      document.getElementById('step1').classList.remove('active');
+      document.getElementById('step2').classList.add('active');
+
+      document.getElementById('dot-step1').classList.remove('active');
+      document.getElementById('dot-step2').classList.add('active');
+
+      updateServiceVisibility();
+    }
+
+    function backToStep1() {
+      document.getElementById('step2').classList.remove('active');
+      document.getElementById('step1').classList.add('active');
+
+      document.getElementById('dot-step2').classList.remove('active');
+      document.getElementById('dot-step1').classList.add('active');
     }
 
     document.addEventListener('DOMContentLoaded', function () {

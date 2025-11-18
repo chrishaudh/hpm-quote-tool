@@ -10,6 +10,11 @@ templates = Jinja2Templates(directory="templates")
 
 
 class QuoteRequest(BaseModel):
+    # Contact info (for JSON API; HTML form uses same field names)
+    contact_name: str | None = None
+    contact_phone: str | None = None
+
+    # Service details
     service: str = "tv_mounting"
     tv_size: int = 0
     wall_type: str = "drywall"
@@ -31,6 +36,8 @@ def show_form(request: Request):
 @app.post("/quote-html", response_class=HTMLResponse)
 async def quote_html(
     request: Request,
+    contact_name: str = Form(""),
+    contact_phone: str = Form(""),
     service: str = Form("tv_mounting"),
     tv_size: int = Form(0),
     wall_type: str = Form("drywall"),
@@ -64,6 +71,8 @@ async def quote_html(
         "quote_result.html",
         {
             "request": request,
+            "contact_name": contact_name,
+            "contact_phone": contact_phone,
             **result,
         },
     )
