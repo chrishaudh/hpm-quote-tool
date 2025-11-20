@@ -41,15 +41,14 @@
         <div class="pill">No surprise charges</div>
       </div>
 
-     <p>
-  {% if contact_name and contact_name.strip() %}
-    Thanks, {{ contact_name }}. 
-  {% else %}
-    Thanks.
-  {% endif %}
-  Here’s your estimated price based on the details you provided. This includes estimated tax for your service area.
-</p>
-
+      <p>
+        {% if contact_name and contact_name.strip() %}
+          Thanks, {{ contact_name }}. 
+        {% else %}
+          Thanks.
+        {% endif %}
+        Here’s your estimated price based on the details you provided. This includes estimated tax for your service area.
+      </p>
 
       <div class="line-items">
         <div class="line-items-row">
@@ -87,13 +86,16 @@
       </div>
 
       <div class="buttons">
-        <!-- Replace this href with your actual booking link -->
-        <a href="https://hawkinspromounting.squarespace.com/consultation" class="btn btn-primary" target="_blank">
-  	Book This Install
-	</a>
+        <!-- Book This Install now redirects to your on-site booking confirmation page -->
+        <a 
+          href="https://hawkinspromounting.com/booking-confirmed" 
+          class="btn btn-primary" 
+          target="_top"
+        >
+          Book This Install
+        </a>
 
-
-        <!-- Replace this email + subject with your real info -->
+        <!-- Ask a question via email -->
         <a href="mailto:info@hawkinspromounting.com?subject=Question about my mounting/installation quote"
            class="btn btn-secondary">
           Ask a Question First
