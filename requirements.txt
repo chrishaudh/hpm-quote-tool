@@ -3,3 +3,8 @@ uvicorn[standard]
 jinja2
 python-multipart
 requests
+
+# Google Calendar API dependencies
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
