@@ -1,0 +1,17 @@
+# Ignore Python cache
+__pycache__/
+*.pyc
+
+# macOS junk
+.DS_Store
+
+# Google Calendar secrets — NEVER commit these
+credentials.json
+token.json
+
+# Local authentication helper (not needed in repo)
+gcal_auth.py
+
+# Optional: ignore virtual environment if you use one
+venv/
+.env/
