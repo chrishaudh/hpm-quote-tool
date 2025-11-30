@@ -86,14 +86,17 @@
       </div>
 
       <div class="buttons">
-        <!-- Book This Install now redirects to your on-site booking confirmation page -->
-        <a 
-          href="https://hawkinspromounting.com/booking-confirmed" 
-          class="btn btn-primary" 
-          target="_top"
-        >
-          Book This Install
-        </a>
+        <!-- Book This Install: sends data into your /book route so only quote users can book -->
+        <form action="/book" method="get">
+          <input type="hidden" name="service_type" value="{{ service | default('') }}">
+          <input type="hidden" name="name" value="{{ contact_name | default('') }}">
+          <input type="hidden" name="email" value="{{ contact_email | default('') }}">
+          <input type="hidden" name="phone" value="{{ contact_phone | default('') }}">
+          <!-- address is not collected in quote; booking form will ask for it -->
+          <button type="submit" class="btn btn-primary">
+            Book This Install
+          </button>
+        </form>
 
         <!-- Ask a question via email -->
         <a href="mailto:info@hawkinspromounting.com?subject=Question about my mounting/installation quote"

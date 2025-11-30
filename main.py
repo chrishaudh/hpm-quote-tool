@@ -5,12 +5,127 @@ from fastapi import FastAPI, Request, Form, BackgroundTasks
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
+from google_calendar import create_booking_event
+
 
 import requests  # make sure this is in requirements.txt
 
 from quote_logic import calculate_quote
 
 app = FastAPI(title="Hawkins Pro Mounting Quote API")
+
+from datetime import datetime, timedelta
+
+@app.get("/test-book")
+async def test_book():
+    start = datetime.now() + timedelta(hours=1)
+    end = start + timedelta(hours=2)
+
+    create_booking_event(
+        summary="Test Booking",
+        description="This is a test booking from FastAPI.",
+        start_dt=start,
+        end_dt=end,
+        customer_email=None,
+    )
+
+    return {"status": "ok"}
+
+from fastapi import Query
+
+@app.get("/book", response_class=HTMLResponse)
+async def show_booking_form(
+    request: Request,
+    service_type: Optional[str] = Query(None),
+    name: Optional[str] = Query(None),
+    email: Optional[str] = Query(None),
+    phone: Optional[str] = Query(None),
+    address: Optional[str] = Query(None),
+):
+    """
+    Booking form is ONLY intended to be accessed after someone completes
+    a quote. The quote tool sends service_type, name, email, phone, address
+    as query parameters. We pre-fill the booking form with those values.
+    """
+
+    service_types = [
+        "TV Mounting",
+        "Picture & Art Hanging",
+        "Floating Shelves",
+        "Curtains & Blinds",
+        "Closet Shelving",
+    ]
+
+    prefilled = {
+        "service_type": service_type,
+        "name": name,
+        "email": email,
+        "phone": phone,
+        "address": address,
+    }
+
+    return templates.TemplateResponse(
+        "booking_form.html",
+        {
+            "request": request,
+            "service_types": service_types,
+            "prefilled": prefilled,
+        },
+    )
+
+
+@app.post("/book", response_class=HTMLResponse)
+async def submit_booking(
+    request: Request,
+    service_type: str = Form(...),
+    appointment_date: str = Form(...),   # yyyy-mm-dd
+    appointment_time: str = Form(...),   # HH:MM
+    name: str = Form(...),
+    email: str = Form(...),
+    phone: str = Form(...),
+    address: str = Form(...),
+    notes: str = Form(""),
+):
+    # Turn date + time strings into a datetime
+    start_dt = datetime.fromisoformat(f"{appointment_date}T{appointment_time}")
+
+    # You can tweak this per service later; for now assume 2-hour slot
+    end_dt = start_dt + timedelta(hours=2)
+
+    summary = f"{service_type} - {name}"
+    description_lines = [
+        f"Service: {service_type}",
+        f"Customer: {name}",
+        f"Email: {email}",
+        f"Phone: {phone}",
+        f"Address: {address}",
+    ]
+    if notes:
+        description_lines.append(f"Notes: {notes}")
+    description = "\n".join(description_lines)
+
+    # Create the calendar event 🎫
+    create_booking_event(
+        summary=summary,
+        description=description,
+        start_dt=start_dt,
+        end_dt=end_dt,
+        customer_email=email,
+        calendar_id="primary",
+    )
+
+    # Show confirmation page
+    return templates.TemplateResponse(
+        "booking_confirm.html",
+        {
+            "request": request,
+            "name": name,
+            "service_type": service_type,
+            "start": start_dt,
+            "end": end_dt,
+            "address": address,
+        },
+    )
 
 templates = Jinja2Templates(directory="templates")
 
