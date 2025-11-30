@@ -1,5 +1,7 @@
 from datetime import datetime
 from typing import Optional
+import os
+import json
 
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
@@ -8,10 +10,21 @@ SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
 def get_calendar_service():
     """
-    Load Calendar API credentials from token.json and build the service client.
-    token.json is generated locally by running gcal_auth.py once.
+    Load Calendar API credentials.
+
+    - Locally: from token.json (file created by gcal_auth.py)
+    - On Render: from GOOGLE_CALENDAR_TOKEN_JSON env var
     """
-    creds = Credentials.from_authorized_user_file("token.json", SCOPES)
+    token_env = os.getenv("GOOGLE_CALENDAR_TOKEN_JSON")
+
+    if token_env:
+        # Read token JSON from environment variable (Render)
+        data = json.loads(token_env)
+        creds = Credentials.from_authorized_user_info(data, SCOPES)
+    else:
+        # Local fallback: use token.json file
+        creds = Credentials.from_authorized_user_file("token.json", SCOPES)
+
     service = build("calendar", "v3", credentials=creds)
     return service
 
@@ -30,16 +43,16 @@ def create_booking_event(
     service = get_calendar_service()
 
     event_body = {
-      "summary": summary,
-      "description": description,
-      "start": {
-          "dateTime": start_dt.isoformat(),
-          "timeZone": "America/New_York",
-      },
-      "end": {
-          "dateTime": end_dt.isoformat(),
-          "timeZone": "America/New_York",
-      },
+        "summary": summary,
+        "description": description,
+        "start": {
+            "dateTime": start_dt.isoformat(),
+            "timeZone": "America/New_York",
+        },
+        "end": {
+            "dateTime": end_dt.isoformat(),
+            "timeZone": "America/New_York",
+        },
     }
 
     if customer_email:
