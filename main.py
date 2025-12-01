@@ -42,7 +42,7 @@ ZAPIER_WEBHOOK_URL = "https://hooks.zapier.com/hooks/catch/25408903/uz2ihgh/"
 
 # Your Zapier webhook for BOOKINGS (email confirmations)
 # Make sure to replace this with your real booking Zap URL.
-BOOKING_WEBHOOK_URL = "https://hooks.zapier.com/hooks/catch/25408903/BOOKING_WEBHOOK_REPLACE_ME/"
+BOOKING_WEBHOOK_URL = "https://hooks.zapier.com/hooks/catch/25408903/ukipdo4/"
 
 # Calendar ID (you can change this later if you use a non-primary calendar)
 CALENDAR_ID = "primary"
@@ -52,20 +52,24 @@ CALENDAR_ID = "primary"
 # Address validation helper
 # =====================================================
 
-def validate_address(address: str) -> tuple[bool, str]:
+def validate_address(address: str):
     """
     Basic address validation.
 
-    Rules:
-    - Not empty
-    - At least 3 comma-separated parts: street, city, state+ZIP
-    - State: 2-letter code (e.g. DC, MD, VA)
-    - ZIP: 5 digits (or ZIP+4)
-    - Optional: state must be in SERVICE_AREA_STATES
+    Returns:
+        (is_valid: bool, parsed: dict, error_message: str)
+
+        parsed = {
+            "street": str,
+            "city": str,
+            "state": str,
+            "zip": str,
+        }
+        When invalid, parsed will be {}.
     """
     addr = (address or "").strip()
     if not addr:
-        return False, "Please enter the installation address."
+        return False, {}, "Please enter the installation address."
 
     # Expect something like:
     # "123 Main St, Washington, DC 20001"
@@ -73,6 +77,7 @@ def validate_address(address: str) -> tuple[bool, str]:
     if len(parts) < 3:
         return (
             False,
+            {},
             "Please include street, city, state, and ZIP code (e.g. 123 Main St, Washington, DC 20001).",
         )
 
@@ -85,6 +90,7 @@ def validate_address(address: str) -> tuple[bool, str]:
     if len(tokens) < 2:
         return (
             False,
+            {},
             "Please include a 2-letter state and 5-digit ZIP code (e.g. DC 20001).",
         )
 
@@ -95,6 +101,7 @@ def validate_address(address: str) -> tuple[bool, str]:
     if len(state) != 2 or not state.isalpha():
         return (
             False,
+            {},
             "State should be a 2-letter abbreviation (e.g. DC, MD, VA).",
         )
 
@@ -102,6 +109,7 @@ def validate_address(address: str) -> tuple[bool, str]:
     if not ZIP_RE.match(zip_code):
         return (
             False,
+            {},
             "ZIP code should be 5 digits (e.g. 20001).",
         )
 
@@ -109,12 +117,19 @@ def validate_address(address: str) -> tuple[bool, str]:
     if SERVICE_AREA_STATES and state not in SERVICE_AREA_STATES:
         return (
             False,
+            {},
             "This address appears to be outside our service area (DC, Maryland, Northern Virginia). Please double-check or contact us.",
         )
 
-    # Passed all checks
-    return True, ""
+    parsed = {
+        "street": street,
+        "city": city,
+        "state": state,
+        "zip": zip_code,
+    }
 
+    # Passed all checks
+    return True, parsed, ""
 
 # =====================================================
 # TEST ROUTE: simple test to confirm calendar booking
@@ -229,10 +244,10 @@ async def submit_booking(
     """
     tz = pytz.timezone(TIMEZONE)
 
-    # -----------------------------
+       # -----------------------------
     # 0) Validate address
     # -----------------------------
-    is_valid_address, addr_error = validate_address(address)
+    is_valid_address, parsed_address, addr_error = validate_address(address)
     if not is_valid_address:
         # Re-render the booking form with an inline error under the address field
         prefilled = {
@@ -333,7 +348,7 @@ async def submit_booking(
         calendar_id=CALENDAR_ID,
     )
 
-    # -----------------------------
+       # -----------------------------
     # 5) Trigger email confirmation via Zapier (non-blocking)
     # -----------------------------
     background_tasks.add_task(
@@ -346,6 +361,7 @@ async def submit_booking(
         start_dt,
         end_dt,
         notes,
+        parsed_address,
     )
 
     # -----------------------------
@@ -472,6 +488,7 @@ def send_booking_to_zapier(
     start_dt: datetime,
     end_dt: datetime,
     notes: str,
+    parsed_address: dict,
 ) -> None:
     """
     Send booking details to Zapier so it can:
@@ -501,6 +518,12 @@ def send_booking_to_zapier(
             "email": email,
             "phone": phone,
             "address": address,
+
+            # Parsed address components (for segmentation/reporting in Zapier)
+            "address_street": parsed_address.get("street", ""),
+            "address_city": parsed_address.get("city", ""),
+            "address_state": parsed_address.get("state", ""),
+            "address_zip": parsed_address.get("zip", ""),
 
             # Booking details
             "service_type": service_type,
