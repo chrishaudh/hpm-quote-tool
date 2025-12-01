@@ -383,9 +383,12 @@ async def submit_booking(
     if include_decor_bool:
         services_this_visit.append("Decor / Art & Mirror Arrangement")
 
+    num_services = len(services_this_visit)
+
     if services_this_visit:
         description_lines.append("Services this visit: " + ", ".join(services_this_visit))
 
+    description_lines.append(f"Number of services: {num_services}")
     description_lines.append(f"Expected duration: {duration_hours:.1f} hours")
     description_lines.append(f"Same-day booking: {'YES' if is_same_day_booking else 'NO'}")
     description_lines.append(f"After-hours booking: {'YES' if is_after_hours_booking else 'NO'}")
@@ -402,7 +405,8 @@ async def submit_booking(
         calendar_id=CALENDAR_ID,
     )
 
-    # 5) Trigger email confirmation via Zapier (non-blocking)
+    # 5) Trigger email confirmation via Zapier (non-blocking),
+    #    now with services + duration + count.
     background_tasks.add_task(
         send_booking_to_zapier,
         name,
@@ -414,9 +418,12 @@ async def submit_booking(
         end_dt,
         notes,
         parsed_address,
+        services_this_visit,
+        duration_hours,
+        num_services,
     )
 
-    # 6) Show confirmation page
+    # 6) Show confirmation page with services + duration
     return templates.TemplateResponse(
         "booking_confirm.html",
         {
@@ -426,6 +433,9 @@ async def submit_booking(
             "start": start_dt,
             "end": end_dt,
             "address": address,
+            "services_this_visit": services_this_visit,
+            "num_services": num_services,
+            "duration_hours": duration_hours,
         },
     )
 
@@ -559,9 +569,16 @@ def send_booking_to_zapier(
     end_dt: datetime,
     notes: str,
     parsed_address: dict,
+    services_this_visit: list,
+    duration_hours: float,
+    num_services: int,
 ) -> None:
     """
     Send booking details to Zapier so it can send a confirmation email and log the booking.
+    Includes:
+      - which services are included
+      - how many services
+      - estimated duration
     """
     if not BOOKING_WEBHOOK_URL:
         print("BOOKING_WEBHOOK_URL is empty; skipping booking Zapier send")
@@ -579,6 +596,8 @@ def send_booking_to_zapier(
         same_day_surcharge = SAME_DAY_SURCHARGE if is_same_day else 0.0
         after_hours_surcharge = AFTER_HOURS_SURCHARGE if is_after_hours else 0.0
         total_surcharge = same_day_surcharge + after_hours_surcharge
+
+        services_str = ", ".join(services_this_visit) if services_this_visit else ""
 
         payload = {
             "timestamp": datetime.utcnow().isoformat(),
@@ -611,6 +630,11 @@ def send_booking_to_zapier(
             "same_day_surcharge": same_day_surcharge,
             "after_hours_surcharge": after_hours_surcharge,
             "total_surcharge": total_surcharge,
+
+            # Multi-service details
+            "services_this_visit": services_str,
+            "num_services": num_services,
+            "duration_hours": duration_hours,
 
             # Extra notes
             "notes": notes or "",
