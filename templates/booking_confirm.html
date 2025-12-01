@@ -11,38 +11,148 @@
       max-width: 600px;
       margin: 0 auto;
       padding: 1.5rem;
-      text-align: left;
+      background-color: #f9fafb;
+      color: #111827;
+    }
+    .card {
+      background: #ffffff;
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08);
+      margin-top: 1.5rem;
     }
     h1 {
-      font-size: 1.7rem;
+      font-size: 1.6rem;
       margin-bottom: 0.75rem;
+    }
+    h2 {
+      font-size: 1.1rem;
+      margin-top: 1.5rem;
+      margin-bottom: 0.5rem;
     }
     p {
       margin: 0.25rem 0;
+      line-height: 1.5;
     }
-    .card {
+    .highlight {
+      font-weight: 600;
+      color: #111827;
+    }
+    .pill {
+      display: inline-block;
+      padding: 0.25rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      background: #e5e7eb;
+      color: #374151;
+      margin-right: 0.35rem;
+      margin-top: 0.25rem;
+    }
+    .pill-primary {
+      background: #111827;
+      color: #ffffff;
+    }
+    .pill-soft {
+      background: #f3f4f6;
+    }
+    .section {
       margin-top: 1rem;
-      padding: 1rem;
-      border-radius: 0.75rem;
-      border: 1px solid #e5e5e5;
-      background: #fafafa;
+    }
+    .muted {
+      color: #6b7280;
+      font-size: 0.9rem;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-top: 1.5rem;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.7rem 1.3rem;
+      border-radius: 999px;
+      border: none;
+      font-weight: 600;
+      font-size: 0.95rem;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .btn-primary {
+      background: #111827;
+      color: #ffffff;
+    }
+    .btn-outline {
+      background: transparent;
+      color: #111827;
+      border: 1px solid #d1d5db;
+    }
+    .divider {
+      height: 1px;
+      background: #e5e7eb;
+      margin: 1rem 0;
     }
   </style>
 </head>
 <body>
-  <h1>You're booked, {{ name }} 🎉</h1>
-  <p>Thanks for choosing Hawkins Pro Mounting.</p>
-
   <div class="card">
-    <p><strong>Service:</strong> {{ service_type }}</p>
-    <p><strong>Date:</strong> {{ start.strftime("%A, %B %d, %Y") }}</p>
-    <p><strong>Time:</strong> {{ start.strftime("%I:%M %p") }} – {{ end.strftime("%I:%M %p") }}</p>
-    <p><strong>Address:</strong> {{ address }}</p>
-  </div>
+    <h1>You're all set, {{ name }} 👌</h1>
+    <p>We’ve received your booking for <span class="highlight">{{ service_type }}</span>.</p>
+    <p>A confirmation email will be sent to you shortly with all the details.</p>
 
-  <p style="margin-top: 1rem;">
-    A calendar invitation has been sent to your email. If anything needs to change,
-    just reply to that email and we’ll adjust your appointment.
-  </p>
+    <div class="section">
+      <h2>Appointment details</h2>
+      <p>
+        <span class="muted">Date</span><br />
+        <span class="highlight">
+          {{ start.strftime("%A, %B %-d, %Y") }}
+        </span>
+      </p>
+      <p>
+        <span class="muted">Time window</span><br />
+        <span class="highlight">
+          {{ start.strftime("%-I:%M %p") }} – {{ end.strftime("%-I:%M %p") }}
+        </span>
+      </p>
+      <p>
+        <span class="muted">Service</span><br />
+        <span class="highlight">{{ service_type }}</span>
+      </p>
+      <p>
+        <span class="muted">Installation address</span><br />
+        <span class="highlight">{{ address }}</span>
+      </p>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="section">
+      <h2>What happens next?</h2>
+      <p class="muted">
+        A Hawkins Pro Mounting technician will review your details and confirm everything by email or text.
+        If anything needs clarification (parking, building access, or wall type), we’ll reach out before your appointment.
+      </p>
+      <p class="muted">
+        On the day of your service, please make sure we have:
+      </p>
+      <ul class="muted">
+        <li>Access to the TV and wall area</li>
+        <li>Any mounts, cords, or accessories you want installed</li>
+        <li>Parking or building entry instructions if needed</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <span class="pill pill-primary">Booking confirmed</span>
+      <span class="pill pill-soft">Hawkins Pro Mounting</span>
+    </div>
+
+    <div class="actions">
+      <a href="/" class="btn btn-primary">Back to Quote Tool</a>
+      <a href="/book" class="btn btn-outline">Book Another Appointment</a>
+    </div>
+  </div>
 </body>
 </html>

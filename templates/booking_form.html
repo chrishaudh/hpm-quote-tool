@@ -33,6 +33,7 @@
       border-radius: 0.375rem;
       border: 1px solid #ccc;
       font-size: 0.95rem;
+      box-sizing: border-box;
     }
     button {
       padding: 0.75rem 1.25rem;
@@ -40,6 +41,8 @@
       border: none;
       font-weight: 600;
       cursor: pointer;
+      background: #111827;
+      color: #ffffff;
     }
     .two-col {
       display: grid;
@@ -50,6 +53,11 @@
       .two-col {
         grid-template-columns: 1fr;
       }
+    }
+    .availability-note {
+      font-size: 0.85rem;
+      margin-top: 0.25rem;
+      color: #6b7280;
     }
   </style>
 </head>
@@ -73,11 +81,19 @@
     <div class="two-col">
       <div>
         <label for="appointment_date">Preferred date</label>
-        <input id="appointment_date" name="appointment_date" type="date" required />
+        <input
+          id="appointment_date"
+          name="appointment_date"
+          type="date"
+          required
+        />
       </div>
       <div>
-        <label for="appointment_time">Preferred time</label>
-        <input id="appointment_time" name="appointment_time" type="time" required />
+        <label for="time_slot">Preferred time</label>
+        <select id="time_slot" name="time_slot" required>
+          <option value="">Select a date first</option>
+        </select>
+        <p id="availability-note" class="availability-note"></p>
       </div>
     </div>
 
@@ -139,5 +155,98 @@
 
     <button type="submit">Confirm Booking</button>
   </form>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const dateInput = document.getElementById("appointment_date");
+      const timeSelect = document.getElementById("time_slot");
+      const availabilityNote = document.getElementById("availability-note");
+
+      function clearTimeOptions(message) {
+        timeSelect.innerHTML = "";
+        const opt = document.createElement("option");
+        opt.value = "";
+        opt.textContent = message;
+        opt.disabled = true;
+        opt.selected = true;
+        timeSelect.appendChild(opt);
+      }
+
+      async function loadAvailability() {
+        const dateValue = dateInput.value;
+        if (!dateValue) return;
+
+        clearTimeOptions("Loading available times...");
+
+        try {
+          const resp = await fetch(`/api/availability?service_date=${encodeURIComponent(dateValue)}`);
+          if (!resp.ok) {
+            clearTimeOptions("Error loading availability");
+            if (availabilityNote) {
+              availabilityNote.textContent = "We couldn't load available times. Please try again.";
+            }
+            return;
+          }
+
+          const data = await resp.json();
+          const slots = data.slots || [];
+
+          if (slots.length === 0) {
+            clearTimeOptions("No available times for this date");
+            if (availabilityNote) {
+              availabilityNote.textContent = "No available times. Try a different date.";
+            }
+            return;
+          }
+
+          timeSelect.innerHTML = "";
+          const placeholder = document.createElement("option");
+          placeholder.value = "";
+          placeholder.textContent = "Select a time";
+          placeholder.disabled = true;
+          placeholder.selected = true;
+          timeSelect.appendChild(placeholder);
+
+          slots.forEach(slot => {
+            const opt = document.createElement("option");
+            // Send ISO datetime value to backend
+            opt.value = slot.start;
+
+            let label = slot.label;
+            if (slot.is_same_day) {
+              label += " (Same-day)";
+            }
+            if (slot.is_after_hours) {
+              label += " (After-hours)";
+            }
+
+            opt.textContent = label;
+            opt.dataset.isSameDay = slot.is_same_day;
+            opt.dataset.isAfterHours = slot.is_after_hours;
+
+            timeSelect.appendChild(opt);
+          });
+
+          if (availabilityNote) {
+            availabilityNote.textContent = "";
+          }
+        } catch (err) {
+          console.error(err);
+          clearTimeOptions("Error loading availability");
+          if (availabilityNote) {
+            availabilityNote.textContent = "Something went wrong loading availability.";
+          }
+        }
+      }
+
+      // When the user picks a date, fetch availability
+      dateInput.addEventListener("change", loadAvailability);
+
+      // If a date is already filled for some reason, load its slots
+      if (dateInput.value) {
+        loadAvailability();
+      }
+    });
+  </script>
 </body>
 </html>

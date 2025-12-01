@@ -1,24 +1,40 @@
 from typing import Optional
-from datetime import datetime
-
-from fastapi import FastAPI, Request, Form, BackgroundTasks
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
-from google_calendar import create_booking_event
-
+from datetime import datetime, date, timedelta
 
 import requests  # make sure this is in requirements.txt
+import pytz
 
+from fastapi import FastAPI, Request, Form, BackgroundTasks, Query
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
+
+from google_calendar import create_booking_event, get_available_slots_for_date
 from quote_logic import calculate_quote
+from config import TIMEZONE
 
 app = FastAPI(title="Hawkins Pro Mounting Quote API")
 
-from datetime import datetime, timedelta
+templates = Jinja2Templates(directory="templates")
 
+# Your Zapier webhook for QUOTES (already in use)
+ZAPIER_WEBHOOK_URL = "https://hooks.zapier.com/hooks/catch/25408903/uz2ihgh/"
+
+# 🔔 NEW: Your Zapier webhook for BOOKINGS (email + SMS confirmations)
+# Create a new Zap with a "Catch Hook" trigger and paste that URL here.
+BOOKING_WEBHOOK_URL = "https://hooks.zapier.com/hooks/catch/25408903/ukipdo4/"
+
+# Calendar ID (you can change this later if you use a non-primary calendar)
+CALENDAR_ID = "primary"
+
+
+# =====================================================
+# TEST ROUTE: simple test to confirm calendar booking
+# =====================================================
 @app.get("/test-book")
 async def test_book():
-    start = datetime.now() + timedelta(hours=1)
+    tz = pytz.timezone(TIMEZONE)
+    start = tz.localize(datetime.now() + timedelta(hours=1))
     end = start + timedelta(hours=2)
 
     create_booking_event(
@@ -31,8 +47,30 @@ async def test_book():
 
     return {"status": "ok"}
 
-from fastapi import Query
 
+# =====================================================
+# AVAILABILITY API
+# =====================================================
+@app.get("/api/availability")
+async def api_get_availability(
+    service_date: str = Query(..., description="Date in YYYY-MM-DD"),
+):
+    """
+    Return available time slots for a given date.
+    This uses your Google Calendar free/busy + business rules.
+    """
+    try:
+        dt: date = datetime.strptime(service_date, "%Y-%m-%d").date()
+    except ValueError:
+        return JSONResponse(status_code=400, content={"error": "Invalid date format"})
+
+    slots = get_available_slots_for_date(CALENDAR_ID, dt)
+    return {"date": service_date, "slots": slots}
+
+
+# =====================================================
+# BOOKING FORM (GET)
+# =====================================================
 @app.get("/book", response_class=HTMLResponse)
 async def show_booking_form(
     request: Request,
@@ -46,6 +84,11 @@ async def show_booking_form(
     Booking form is ONLY intended to be accessed after someone completes
     a quote. The quote tool sends service_type, name, email, phone, address
     as query parameters. We pre-fill the booking form with those values.
+
+    The HTML template (booking_form.html) should:
+      - have a date input (name="appointment_date", id="appointment_date")
+      - have a time select (name="time_slot", id="time_slot")
+      - use JS to call /api/availability when the date changes
     """
 
     service_types = [
@@ -74,24 +117,91 @@ async def show_booking_form(
     )
 
 
+# =====================================================
+# BOOKING FORM (POST)
+# =====================================================
 @app.post("/book", response_class=HTMLResponse)
 async def submit_booking(
     request: Request,
+    background_tasks: BackgroundTasks,
     service_type: str = Form(...),
-    appointment_date: str = Form(...),   # yyyy-mm-dd
-    appointment_time: str = Form(...),   # HH:MM
+    # NEW STYLE: ISO datetime string from availability dropdown
+    time_slot: Optional[str] = Form(None),
+    # LEGACY STYLE: separate date + time fields (kept for backward compatibility)
+    appointment_date: Optional[str] = Form(None),   # yyyy-mm-dd
+    appointment_time: Optional[str] = Form(None),   # HH:MM
     name: str = Form(...),
     email: str = Form(...),
     phone: str = Form(...),
     address: str = Form(...),
     notes: str = Form(""),
 ):
-    # Turn date + time strings into a datetime
-    start_dt = datetime.fromisoformat(f"{appointment_date}T{appointment_time}")
+    """
+    Handles booking submissions.
 
+    Preferred (new) behavior:
+      - Front-end uses /api/availability to fetch slots
+      - <select name="time_slot"> holds ISO datetime strings
+
+    Fallback (legacy) behavior:
+      - If time_slot is empty, we fall back to appointment_date + appointment_time
+    """
+    tz = pytz.timezone(TIMEZONE)
+
+    # -----------------------------
+    # 1) Determine start datetime
+    # -----------------------------
+    if time_slot:
+        # New style: time_slot is an ISO datetime string
+        try:
+            start_dt = datetime.fromisoformat(time_slot)
+        except ValueError:
+            return templates.TemplateResponse(
+                "booking_error.html",
+                {
+                    "request": request,
+                    "message": "Invalid time slot selected. Please go back and try again.",
+                },
+                status_code=400,
+            )
+    else:
+        # Legacy fallback: use separate date + time
+        if not appointment_date or not appointment_time:
+            return templates.TemplateResponse(
+                "booking_error.html",
+                {
+                    "request": request,
+                    "message": "Missing appointment date/time. Please go back and select a time.",
+                },
+                status_code=400,
+            )
+        try:
+            start_dt = datetime.fromisoformat(f"{appointment_date}T{appointment_time}")
+        except ValueError:
+            return templates.TemplateResponse(
+                "booking_error.html",
+                {
+                    "request": request,
+                    "message": "Invalid date or time format. Please go back and try again.",
+                },
+                status_code=400,
+            )
+
+    # Ensure start_dt is timezone-aware (America/New_York)
+    if start_dt.tzinfo is None:
+        start_dt = tz.localize(start_dt)
+    else:
+        start_dt = start_dt.astimezone(tz)
+
+    # -----------------------------
+    # 2) Determine end datetime
+    # -----------------------------
     # You can tweak this per service later; for now assume 2-hour slot
     end_dt = start_dt + timedelta(hours=2)
 
+    # -----------------------------
+    # 3) Build calendar event details
+    # -----------------------------
     summary = f"{service_type} - {name}"
     description_lines = [
         f"Service: {service_type}",
@@ -104,17 +214,36 @@ async def submit_booking(
         description_lines.append(f"Notes: {notes}")
     description = "\n".join(description_lines)
 
-    # Create the calendar event 🎫
+    # -----------------------------
+    # 4) Create the calendar event 🎫
+    # -----------------------------
     create_booking_event(
         summary=summary,
         description=description,
         start_dt=start_dt,
         end_dt=end_dt,
         customer_email=email,
-        calendar_id="primary",
+        calendar_id=CALENDAR_ID,
     )
 
-    # Show confirmation page
+    # -----------------------------
+    # 5) Trigger email + SMS via Zapier (non-blocking)
+    # -----------------------------
+    background_tasks.add_task(
+        send_booking_to_zapier,
+        name,
+        email,
+        phone,
+        address,
+        service_type,
+        start_dt,
+        end_dt,
+        notes,
+    )
+
+    # -----------------------------
+    # 6) Show confirmation page
+    # -----------------------------
     return templates.TemplateResponse(
         "booking_confirm.html",
         {
@@ -127,12 +256,10 @@ async def submit_booking(
         },
     )
 
-templates = Jinja2Templates(directory="templates")
 
-# Your real Zapier webhook URL
-ZAPIER_WEBHOOK_URL = "https://hooks.zapier.com/hooks/catch/25408903/uz2ihgh/"
-
-
+# =====================================================
+# Pydantic model for JSON quote requests
+# =====================================================
 class QuoteRequest(BaseModel):
     # Contact info (for JSON API; HTML form uses same field names)
     contact_name: Optional[str] = None
@@ -153,6 +280,9 @@ class QuoteRequest(BaseModel):
     zip_code: str = "20735"
 
 
+# =====================================================
+# Zapier sending helper for QUOTES
+# =====================================================
 def send_lead_to_zapier(
     contact_name: Optional[str],
     contact_phone: Optional[str],
@@ -213,7 +343,7 @@ def send_lead_to_zapier(
         }
 
         # Debug: see exactly what we send to Zapier
-        print("📤 Payload sending to Zapier:")
+        print("📤 Payload sending to Zapier (quote):")
         print(payload)
 
         resp = requests.post(ZAPIER_WEBHOOK_URL, json=payload, timeout=5)
@@ -225,6 +355,77 @@ def send_lead_to_zapier(
         print(f"❌ Error sending lead to Zapier: {e}")
 
 
+# =====================================================
+# Zapier sending helper for BOOKINGS (email + SMS)
+# =====================================================
+def send_booking_to_zapier(
+    name: str,
+    email: str,
+    phone: str,
+    address: str,
+    service_type: str,
+    start_dt: datetime,
+    end_dt: datetime,
+    notes: str,
+) -> None:
+    """
+    Send booking details to Zapier so it can:
+      - send a confirmation email
+      - send a confirmation SMS
+      - log the booking if desired
+
+    This runs in the background and should never break the user experience.
+    """
+    if not BOOKING_WEBHOOK_URL or "BOOKING_WEBHOOK_REPLACE_ME" in BOOKING_WEBHOOK_URL:
+        print("BOOKING_WEBHOOK_URL is empty or placeholder; skipping booking Zapier send")
+        return
+
+    try:
+        tz = pytz.timezone(TIMEZONE)
+        start_local = start_dt.astimezone(tz)
+        end_local = end_dt.astimezone(tz)
+        now_local = datetime.now(tz)
+
+        is_same_day = (start_local.date() == now_local.date())
+        is_after_hours = start_local.hour >= 18  # simple rule; can be refined
+
+        payload = {
+            "timestamp": datetime.utcnow().isoformat(),
+
+            # Customer info
+            "name": name,
+            "email": email,
+            "phone": phone,
+            "address": address,
+
+            # Booking details
+            "service_type": service_type,
+            "start_iso": start_local.isoformat(),
+            "end_iso": end_local.isoformat(),
+            "start_pretty_date": start_local.strftime("%A, %B %-d, %Y"),
+            "start_pretty_time": start_local.strftime("%-I:%M %p"),
+            "end_pretty_time": end_local.strftime("%-I:%M %p"),
+            "is_same_day": is_same_day,
+            "is_after_hours": is_after_hours,
+
+            # Extra notes
+            "notes": notes or "",
+        }
+
+        print("📤 Payload sending to Zapier (booking):")
+        print(payload)
+
+        resp = requests.post(BOOKING_WEBHOOK_URL, json=payload, timeout=5)
+        resp.raise_for_status()
+        print("✅ Booking sent to Zapier successfully")
+
+    except Exception as e:
+        print(f"❌ Error sending booking to Zapier: {e}")
+
+
+# =====================================================
+# Build booking URL helper (currently points to Calendly)
+# =====================================================
 def build_booking_url(
     contact_name: str,
     contact_email: str,
@@ -254,11 +455,17 @@ def build_booking_url(
     return base_url
 
 
+# =====================================================
+# MAIN QUOTE FORM (HTML)
+# =====================================================
 @app.get("/", response_class=HTMLResponse)
 def show_form(request: Request):
     return templates.TemplateResponse("quote_form.html", {"request": request})
 
 
+# =====================================================
+# QUOTE (HTML) – called by your front-end form
+# =====================================================
 @app.post("/quote-html", response_class=HTMLResponse)
 async def quote_html(
     request: Request,
@@ -336,6 +543,9 @@ async def quote_html(
     )
 
 
+# =====================================================
+# QUOTE (JSON API)
+# =====================================================
 @app.post("/quote")
 def get_quote(request_data: QuoteRequest, background_tasks: BackgroundTasks):
     """
