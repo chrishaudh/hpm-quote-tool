@@ -1,5 +1,6 @@
 from typing import Optional
 from datetime import datetime, date, timedelta
+import re
 
 import requests  # make sure this is in requirements.txt
 import pytz
@@ -17,15 +18,102 @@ app = FastAPI(title="Hawkins Pro Mounting Quote API")
 
 templates = Jinja2Templates(directory="templates")
 
+# ---------------------------------
+# Service + Zapier configuration
+# ---------------------------------
+
+# Service types used in both GET /book and POST /book
+SERVICE_TYPES = [
+    "TV Mounting",
+    "Picture & Art Hanging",
+    "Floating Shelves",
+    "Curtains & Blinds",
+    "Closet Shelving",
+]
+
+# States you serve (for basic service-area validation)
+SERVICE_AREA_STATES = {"DC", "MD", "VA"}
+
+# Simple ZIP pattern: 5 digits or ZIP+4
+ZIP_RE = re.compile(r"^\d{5}(?:-\d{4})?$")
+
 # Your Zapier webhook for QUOTES (already in use)
 ZAPIER_WEBHOOK_URL = "https://hooks.zapier.com/hooks/catch/25408903/uz2ihgh/"
 
-# 🔔 NEW: Your Zapier webhook for BOOKINGS (email + SMS confirmations)
-# Create a new Zap with a "Catch Hook" trigger and paste that URL here.
-BOOKING_WEBHOOK_URL = "https://hooks.zapier.com/hooks/catch/25408903/ukipdo4/"
+# Your Zapier webhook for BOOKINGS (email confirmations)
+# Make sure to replace this with your real booking Zap URL.
+BOOKING_WEBHOOK_URL = "https://hooks.zapier.com/hooks/catch/25408903/BOOKING_WEBHOOK_REPLACE_ME/"
 
 # Calendar ID (you can change this later if you use a non-primary calendar)
 CALENDAR_ID = "primary"
+
+
+# =====================================================
+# Address validation helper
+# =====================================================
+
+def validate_address(address: str) -> tuple[bool, str]:
+    """
+    Basic address validation.
+
+    Rules:
+    - Not empty
+    - At least 3 comma-separated parts: street, city, state+ZIP
+    - State: 2-letter code (e.g. DC, MD, VA)
+    - ZIP: 5 digits (or ZIP+4)
+    - Optional: state must be in SERVICE_AREA_STATES
+    """
+    addr = (address or "").strip()
+    if not addr:
+        return False, "Please enter the installation address."
+
+    # Expect something like:
+    # "123 Main St, Washington, DC 20001"
+    parts = [p.strip() for p in addr.split(",") if p.strip()]
+    if len(parts) < 3:
+        return (
+            False,
+            "Please include street, city, state, and ZIP code (e.g. 123 Main St, Washington, DC 20001).",
+        )
+
+    street = parts[0]
+    city = parts[1]
+    state_zip = parts[-1]
+
+    # State + ZIP are usually in the last chunk
+    tokens = state_zip.split()
+    if len(tokens) < 2:
+        return (
+            False,
+            "Please include a 2-letter state and 5-digit ZIP code (e.g. DC 20001).",
+        )
+
+    state = tokens[0].upper()
+    zip_code = tokens[-1]
+
+    # State: must be 2 letters
+    if len(state) != 2 or not state.isalpha():
+        return (
+            False,
+            "State should be a 2-letter abbreviation (e.g. DC, MD, VA).",
+        )
+
+    # ZIP: must match pattern
+    if not ZIP_RE.match(zip_code):
+        return (
+            False,
+            "ZIP code should be 5 digits (e.g. 20001).",
+        )
+
+    # Optional: enforce service area
+    if SERVICE_AREA_STATES and state not in SERVICE_AREA_STATES:
+        return (
+            False,
+            "This address appears to be outside our service area (DC, Maryland, Northern Virginia). Please double-check or contact us.",
+        )
+
+    # Passed all checks
+    return True, ""
 
 
 # =====================================================
@@ -91,14 +179,6 @@ async def show_booking_form(
       - use JS to call /api/availability when the date changes
     """
 
-    service_types = [
-        "TV Mounting",
-        "Picture & Art Hanging",
-        "Floating Shelves",
-        "Curtains & Blinds",
-        "Closet Shelving",
-    ]
-
     prefilled = {
         "service_type": service_type,
         "name": name,
@@ -111,8 +191,9 @@ async def show_booking_form(
         "booking_form.html",
         {
             "request": request,
-            "service_types": service_types,
+            "service_types": SERVICE_TYPES,
             "prefilled": prefilled,
+            "errors": {},  # no errors on initial load
         },
     )
 
@@ -147,6 +228,32 @@ async def submit_booking(
       - If time_slot is empty, we fall back to appointment_date + appointment_time
     """
     tz = pytz.timezone(TIMEZONE)
+
+    # -----------------------------
+    # 0) Validate address
+    # -----------------------------
+    is_valid_address, addr_error = validate_address(address)
+    if not is_valid_address:
+        # Re-render the booking form with an inline error under the address field
+        prefilled = {
+            "service_type": service_type,
+            "name": name,
+            "email": email,
+            "phone": phone,
+            "address": address,
+        }
+        errors = {"address": addr_error}
+
+        return templates.TemplateResponse(
+            "booking_form.html",
+            {
+                "request": request,
+                "service_types": SERVICE_TYPES,
+                "prefilled": prefilled,
+                "errors": errors,
+            },
+            status_code=400,
+        )
 
     # -----------------------------
     # 1) Determine start datetime
@@ -227,7 +334,7 @@ async def submit_booking(
     )
 
     # -----------------------------
-    # 5) Trigger email + SMS via Zapier (non-blocking)
+    # 5) Trigger email confirmation via Zapier (non-blocking)
     # -----------------------------
     background_tasks.add_task(
         send_booking_to_zapier,
@@ -300,7 +407,7 @@ def send_lead_to_zapier(
 ) -> None:
     """
     Send lead + quote data to Zapier for logging in Google Sheets and triggering
-    email/SMS flows. Failures here should NEVER break the user experience.
+    email flows. Failures here should NEVER break the user experience.
     """
 
     if not ZAPIER_WEBHOOK_URL:
@@ -331,7 +438,7 @@ def send_lead_to_zapier(
             # Booking
             "booking_url": booking_url,
 
-            # Quote breakdown (defensive .get's so missing keys don't crash)
+            # Quote breakdown
             "base_mounting": line_items.get("base_mounting", 0),
             "wall_type_adjustment": line_items.get("wall_type_adjustment", 0),
             "wire_concealment": line_items.get("wire_concealment", 0),
@@ -342,7 +449,6 @@ def send_lead_to_zapier(
             "estimated_total_with_tax": quote_result.get("estimated_total_with_tax", 0),
         }
 
-        # Debug: see exactly what we send to Zapier
         print("📤 Payload sending to Zapier (quote):")
         print(payload)
 
@@ -351,12 +457,11 @@ def send_lead_to_zapier(
         print("✅ Lead sent to Zapier successfully")
 
     except Exception as e:
-        # Log the error but don't crash the app
         print(f"❌ Error sending lead to Zapier: {e}")
 
 
 # =====================================================
-# Zapier sending helper for BOOKINGS (email + SMS)
+# Zapier sending helper for BOOKINGS (email confirmation)
 # =====================================================
 def send_booking_to_zapier(
     name: str,
@@ -371,7 +476,6 @@ def send_booking_to_zapier(
     """
     Send booking details to Zapier so it can:
       - send a confirmation email
-      - send a confirmation SMS
       - log the booking if desired
 
     This runs in the background and should never break the user experience.
@@ -438,8 +542,6 @@ def build_booking_url(
     """
     base_url = "https://calendly.com/hawkins-pro-mounting/quote"
 
-    # Basic query string (you can remove this if you don't care about pre-fill)
-    # NOTE: not fully URL-encoded on purpose to keep it simple
     params = []
     if contact_name:
         params.append(f"name={contact_name}")
