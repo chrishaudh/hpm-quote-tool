@@ -37,15 +37,50 @@ SERVICE_AREA_STATES = {"DC", "MD", "VA"}
 # Simple ZIP pattern: 5 digits or ZIP+4
 ZIP_RE = re.compile(r"^\d{5}(?:-\d{4})?$")
 
-# Your Zapier webhook for QUOTES (already in use)
+# --- Surcharge configuration (edit these to your liking) ---
+
+SAME_DAY_SURCHARGE = 25.0          # e.g. $25 extra for same-day
+AFTER_HOURS_SURCHARGE = 25.0       # e.g. $25 extra for after-hours
+
+# Hour (24h) at or after which a job is considered after-hours
+AFTER_HOURS_START_HOUR = 18
+
+# Your Zapier webhook for QUOTES
 ZAPIER_WEBHOOK_URL = "https://hooks.zapier.com/hooks/catch/25408903/uz2ihgh/"
 
 # Your Zapier webhook for BOOKINGS (email confirmations)
-# Make sure to replace this with your real booking Zap URL.
 BOOKING_WEBHOOK_URL = "https://hooks.zapier.com/hooks/catch/25408903/ukipdo4/"
 
 # Calendar ID (you can change this later if you use a non-primary calendar)
 CALENDAR_ID = "primary"
+
+
+# =====================================================
+# Helper: compute booking duration based on services
+# =====================================================
+def compute_booking_duration_hours(
+    include_tv: bool,
+    include_pictures: bool,
+    include_shelves: bool,
+    include_closet: bool,
+    include_decor: bool,
+) -> float:
+    """
+    Very simple multi-service duration logic:
+
+    - If 0 or 1 service selected: 2 hours
+    - If 2 services selected: 3 hours
+    - If 3+ services selected: 4 hours
+    """
+    flags = [include_tv, include_pictures, include_shelves, include_closet, include_decor]
+    count = sum(1 for f in flags if f)
+
+    if count <= 1:
+        return 2.0
+    elif count == 2:
+        return 3.0
+    else:
+        return 4.0
 
 
 # =====================================================
@@ -58,14 +93,6 @@ def validate_address(address: str):
 
     Returns:
         (is_valid: bool, parsed: dict, error_message: str)
-
-        parsed = {
-            "street": str,
-            "city": str,
-            "state": str,
-            "zip": str,
-        }
-        When invalid, parsed will be {}.
     """
     addr = (address or "").strip()
     if not addr:
@@ -85,7 +112,6 @@ def validate_address(address: str):
     city = parts[1]
     state_zip = parts[-1]
 
-    # State + ZIP are usually in the last chunk
     tokens = state_zip.split()
     if len(tokens) < 2:
         return (
@@ -128,11 +154,11 @@ def validate_address(address: str):
         "zip": zip_code,
     }
 
-    # Passed all checks
     return True, parsed, ""
 
+
 # =====================================================
-# TEST ROUTE: simple test to confirm calendar booking
+# TEST ROUTE
 # =====================================================
 @app.get("/test-book")
 async def test_book():
@@ -187,11 +213,6 @@ async def show_booking_form(
     Booking form is ONLY intended to be accessed after someone completes
     a quote. The quote tool sends service_type, name, email, phone, address
     as query parameters. We pre-fill the booking form with those values.
-
-    The HTML template (booking_form.html) should:
-      - have a date input (name="appointment_date", id="appointment_date")
-      - have a time select (name="time_slot", id="time_slot")
-      - use JS to call /api/availability when the date changes
     """
 
     prefilled = {
@@ -221,11 +242,22 @@ async def submit_booking(
     request: Request,
     background_tasks: BackgroundTasks,
     service_type: str = Form(...),
+
     # NEW STYLE: ISO datetime string from availability dropdown
     time_slot: Optional[str] = Form(None),
+
     # LEGACY STYLE: separate date + time fields (kept for backward compatibility)
     appointment_date: Optional[str] = Form(None),   # yyyy-mm-dd
     appointment_time: Optional[str] = Form(None),   # HH:MM
+
+    # Multi-service selections for this visit
+    include_tv: str = Form("false"),
+    include_pictures: str = Form("false"),
+    include_shelves: str = Form("false"),
+    include_closet: str = Form("false"),
+    include_decor: str = Form("false"),
+
+    # Customer info
     name: str = Form(...),
     email: str = Form(...),
     phone: str = Form(...),
@@ -235,21 +267,16 @@ async def submit_booking(
     """
     Handles booking submissions.
 
-    Preferred (new) behavior:
-      - Front-end uses /api/availability to fetch slots
-      - <select name="time_slot"> holds ISO datetime strings
-
-    Fallback (legacy) behavior:
-      - If time_slot is empty, we fall back to appointment_date + appointment_time
+    Booking duration is dynamic based on which services are included in this visit.
     """
     tz = pytz.timezone(TIMEZONE)
 
-       # -----------------------------
+    def to_bool(value: str) -> bool:
+        return str(value).lower() == "true"
+
     # 0) Validate address
-    # -----------------------------
     is_valid_address, parsed_address, addr_error = validate_address(address)
     if not is_valid_address:
-        # Re-render the booking form with an inline error under the address field
         prefilled = {
             "service_type": service_type,
             "name": name,
@@ -270,11 +297,8 @@ async def submit_booking(
             status_code=400,
         )
 
-    # -----------------------------
     # 1) Determine start datetime
-    # -----------------------------
     if time_slot:
-        # New style: time_slot is an ISO datetime string
         try:
             start_dt = datetime.fromisoformat(time_slot)
         except ValueError:
@@ -287,7 +311,6 @@ async def submit_booking(
                 status_code=400,
             )
     else:
-        # Legacy fallback: use separate date + time
         if not appointment_date or not appointment_time:
             return templates.TemplateResponse(
                 "booking_error.html",
@@ -309,24 +332,37 @@ async def submit_booking(
                 status_code=400,
             )
 
-    # Ensure start_dt is timezone-aware (America/New_York)
     if start_dt.tzinfo is None:
         start_dt = tz.localize(start_dt)
     else:
         start_dt = start_dt.astimezone(tz)
 
-    # -----------------------------
-    # 2) Determine end datetime
-    # -----------------------------
-    # You can tweak this per service later; for now assume 2-hour slot
-    end_dt = start_dt + timedelta(hours=2)
+    # 1b) Interpret multi-service checkboxes
+    include_tv_bool = to_bool(include_tv)
+    include_pictures_bool = to_bool(include_pictures)
+    include_shelves_bool = to_bool(include_shelves)
+    include_closet_bool = to_bool(include_closet)
+    include_decor_bool = to_bool(include_decor)
 
-    # -----------------------------
+    # 2) Determine end datetime (dynamic)
+    duration_hours = compute_booking_duration_hours(
+        include_tv_bool,
+        include_pictures_bool,
+        include_shelves_bool,
+        include_closet_bool,
+        include_decor_bool,
+    )
+    end_dt = start_dt + timedelta(hours=duration_hours)
+
+    # 2b) Same-day / after-hours flags
+    now_local = datetime.now(tz)
+    is_same_day_booking = (start_dt.date() == now_local.date())
+    is_after_hours_booking = start_dt.hour >= AFTER_HOURS_START_HOUR
+
     # 3) Build calendar event details
-    # -----------------------------
     summary = f"{service_type} - {name}"
     description_lines = [
-        f"Service: {service_type}",
+        f"Service (primary): {service_type}",
         f"Customer: {name}",
         f"Email: {email}",
         f"Phone: {phone}",
@@ -334,11 +370,29 @@ async def submit_booking(
     ]
     if notes:
         description_lines.append(f"Notes: {notes}")
+
+    services_this_visit = []
+    if include_tv_bool:
+        services_this_visit.append("TV Mounting")
+    if include_pictures_bool:
+        services_this_visit.append("Picture & Art Hanging")
+    if include_shelves_bool:
+        services_this_visit.append("Floating Shelves")
+    if include_closet_bool:
+        services_this_visit.append("Closet Shelving / Organizers")
+    if include_decor_bool:
+        services_this_visit.append("Decor / Art & Mirror Arrangement")
+
+    if services_this_visit:
+        description_lines.append("Services this visit: " + ", ".join(services_this_visit))
+
+    description_lines.append(f"Expected duration: {duration_hours:.1f} hours")
+    description_lines.append(f"Same-day booking: {'YES' if is_same_day_booking else 'NO'}")
+    description_lines.append(f"After-hours booking: {'YES' if is_after_hours_booking else 'NO'}")
+
     description = "\n".join(description_lines)
 
-    # -----------------------------
-    # 4) Create the calendar event 🎫
-    # -----------------------------
+    # 4) Create the calendar event
     create_booking_event(
         summary=summary,
         description=description,
@@ -348,9 +402,7 @@ async def submit_booking(
         calendar_id=CALENDAR_ID,
     )
 
-       # -----------------------------
     # 5) Trigger email confirmation via Zapier (non-blocking)
-    # -----------------------------
     background_tasks.add_task(
         send_booking_to_zapier,
         name,
@@ -364,9 +416,7 @@ async def submit_booking(
         parsed_address,
     )
 
-    # -----------------------------
     # 6) Show confirmation page
-    # -----------------------------
     return templates.TemplateResponse(
         "booking_confirm.html",
         {
@@ -384,22 +434,42 @@ async def submit_booking(
 # Pydantic model for JSON quote requests
 # =====================================================
 class QuoteRequest(BaseModel):
-    # Contact info (for JSON API; HTML form uses same field names)
+    # Contact info
     contact_name: Optional[str] = None
     contact_phone: Optional[str] = None
     contact_email: Optional[str] = None
 
-    # Service details
+    # Primary service label
     service: str = "tv_mounting"
+
+    # TV Mounting
     tv_size: int = 0
     wall_type: str = "drywall"
     conceal_type: str = "none"
     soundbar: bool = False
-    shelves: bool = False
-    picture_count: int = 0
     led: bool = False
+
+    # Floating Shelves
+    shelves: bool = False
+    shelves_count: int = 0
+
+    # Picture & Art Hanging
+    picture_count: int = 0
+
+    # Closet Shelving
+    closet_shelving: bool = False
+    closet_needs_materials: bool = False
+    closet_shelf_count: int = 0
+    closet_shelf_not_sure: bool = False
+
+    # Decor / Art & Mirrors
+    decor_count: int = 0
+
+    # Visit modifiers
     same_day: bool = False
     after_hours: bool = False
+
+    # Location
     zip_code: str = "20735"
 
 
@@ -454,7 +524,7 @@ def send_lead_to_zapier(
             # Booking
             "booking_url": booking_url,
 
-            # Quote breakdown
+            # Quote breakdown (legacy fields kept for Zapier sheet)
             "base_mounting": line_items.get("base_mounting", 0),
             "wall_type_adjustment": line_items.get("wall_type_adjustment", 0),
             "wire_concealment": line_items.get("wire_concealment", 0),
@@ -491,14 +561,10 @@ def send_booking_to_zapier(
     parsed_address: dict,
 ) -> None:
     """
-    Send booking details to Zapier so it can:
-      - send a confirmation email
-      - log the booking if desired
-
-    This runs in the background and should never break the user experience.
+    Send booking details to Zapier so it can send a confirmation email and log the booking.
     """
-    if not BOOKING_WEBHOOK_URL or "BOOKING_WEBHOOK_REPLACE_ME" in BOOKING_WEBHOOK_URL:
-        print("BOOKING_WEBHOOK_URL is empty or placeholder; skipping booking Zapier send")
+    if not BOOKING_WEBHOOK_URL:
+        print("BOOKING_WEBHOOK_URL is empty; skipping booking Zapier send")
         return
 
     try:
@@ -508,7 +574,11 @@ def send_booking_to_zapier(
         now_local = datetime.now(tz)
 
         is_same_day = (start_local.date() == now_local.date())
-        is_after_hours = start_local.hour >= 18  # simple rule; can be refined
+        is_after_hours = start_local.hour >= AFTER_HOURS_START_HOUR
+
+        same_day_surcharge = SAME_DAY_SURCHARGE if is_same_day else 0.0
+        after_hours_surcharge = AFTER_HOURS_SURCHARGE if is_after_hours else 0.0
+        total_surcharge = same_day_surcharge + after_hours_surcharge
 
         payload = {
             "timestamp": datetime.utcnow().isoformat(),
@@ -519,7 +589,7 @@ def send_booking_to_zapier(
             "phone": phone,
             "address": address,
 
-            # Parsed address components (for segmentation/reporting in Zapier)
+            # Parsed address components
             "address_street": parsed_address.get("street", ""),
             "address_city": parsed_address.get("city", ""),
             "address_state": parsed_address.get("state", ""),
@@ -532,8 +602,15 @@ def send_booking_to_zapier(
             "start_pretty_date": start_local.strftime("%A, %B %-d, %Y"),
             "start_pretty_time": start_local.strftime("%-I:%M %p"),
             "end_pretty_time": end_local.strftime("%-I:%M %p"),
+
+            # Same-day / after-hours flags
             "is_same_day": is_same_day,
             "is_after_hours": is_after_hours,
+
+            # Surcharge amounts
+            "same_day_surcharge": same_day_surcharge,
+            "after_hours_surcharge": after_hours_surcharge,
+            "total_surcharge": total_surcharge,
 
             # Extra notes
             "notes": notes or "",
@@ -551,7 +628,7 @@ def send_booking_to_zapier(
 
 
 # =====================================================
-# Build booking URL helper (currently points to Calendly)
+# Build booking URL helper – NOW POINTS TO /book
 # =====================================================
 def build_booking_url(
     contact_name: str,
@@ -560,10 +637,10 @@ def build_booking_url(
     service: str,
 ) -> str:
     """
-    Simple helper to create a booking link.
-    Replace this with your real scheduling URL (Calendly, etc.)
+    Helper to create a link into your own /book route (same domain),
+    instead of Calendly.
     """
-    base_url = "https://calendly.com/hawkins-pro-mounting/quote"
+    base_url = "/book"
 
     params = []
     if contact_name:
@@ -573,7 +650,17 @@ def build_booking_url(
     if contact_phone:
         params.append(f"phone={contact_phone}")
     if service:
-        params.append(f"service={service}")
+        # Map primary service into the booking service_type dropdown
+        # This expects values like "tv_mounting", "picture_hanging", etc.
+        service_map = {
+            "tv_mounting": "TV Mounting",
+            "picture_hanging": "Picture & Art Hanging",
+            "floating_shelves": "Floating Shelves",
+            "closet_shelving": "Closet Shelving",
+            "decor": "Curtains & Blinds",  # you can tweak this mapping if needed
+        }
+        label = service_map.get(service, "TV Mounting")
+        params.append(f"service_type={label}")
 
     if params:
         return f"{base_url}?{'&'.join(params)}"
@@ -589,7 +676,7 @@ def show_form(request: Request):
 
 
 # =====================================================
-# QUOTE (HTML) – called by your front-end form
+# QUOTE (HTML)
 # =====================================================
 @app.post("/quote-html", response_class=HTMLResponse)
 async def quote_html(
@@ -599,13 +686,31 @@ async def quote_html(
     contact_phone: str = Form(""),
     contact_email: str = Form(""),
     service: str = Form("tv_mounting"),
+
+    # TV mounting
     tv_size: int = Form(0),
     wall_type: str = Form("drywall"),
     conceal_type: str = Form("none"),
     soundbar: str = Form("false"),
-    shelves: str = Form("false"),
-    picture_count: int = Form(0),
     led: str = Form("false"),
+
+    # Floating shelves
+    shelves: str = Form("false"),
+    shelves_count: int = Form(0),
+
+    # Picture & art hanging
+    picture_count: int = Form(0),
+
+    # Closet shelving
+    closet_shelving: str = Form("false"),
+    closet_needs_materials: str = Form("false"),
+    closet_shelf_count: int = Form(0),
+    closet_shelf_not_sure: str = Form("false"),
+
+    # Decor / art & mirror arrangement
+    decor_count: int = Form(0),
+
+    # Visit modifiers
     same_day: str = Form("false"),
     after_hours: str = Form("false"),
     zip_code: str = Form("20735"),
@@ -613,7 +718,7 @@ async def quote_html(
     def to_bool(value: str) -> bool:
         return str(value).lower() == "true"
 
-    # 1) Calculate the quote
+    # 1) Calculate the quote (multi-service)
     result = calculate_quote(
         service=service,
         tv_size=tv_size,
@@ -626,9 +731,15 @@ async def quote_html(
         same_day=to_bool(same_day),
         after_hours=to_bool(after_hours),
         zip_code=zip_code,
+        closet_shelving=to_bool(closet_shelving),
+        closet_needs_materials=to_bool(closet_needs_materials),
+        decor_count=decor_count,
+        shelves_count=shelves_count,
+        closet_shelf_count=closet_shelf_count,
+        closet_shelf_not_sure=to_bool(closet_shelf_not_sure),
     )
 
-    # 2) Build booking URL for this quote
+    # 2) Build booking URL for this quote (now /book)
     booking_url = build_booking_url(
         contact_name=contact_name,
         contact_email=contact_email,
@@ -636,7 +747,7 @@ async def quote_html(
         service=service,
     )
 
-    # 3) Schedule Zapier send in the background (non-blocking)
+    # 3) Schedule Zapier send in the background
     background_tasks.add_task(
         send_lead_to_zapier,
         contact_name,
@@ -675,12 +786,9 @@ async def quote_html(
 def get_quote(request_data: QuoteRequest, background_tasks: BackgroundTasks):
     """
     JSON API version of the quote endpoint.
-    This also logs to Zapier in the background.
     """
-    # 1) Calculate the quote
     result = calculate_quote(**request_data.dict())
 
-    # 2) Build booking URL (may be blank if contact info is missing)
     booking_url = build_booking_url(
         contact_name=request_data.contact_name or "",
         contact_email=request_data.contact_email or "",
@@ -688,7 +796,6 @@ def get_quote(request_data: QuoteRequest, background_tasks: BackgroundTasks):
         service=request_data.service,
     )
 
-    # 3) Schedule Zapier send in the background
     background_tasks.add_task(
         send_lead_to_zapier,
         request_data.contact_name,
@@ -706,7 +813,6 @@ def get_quote(request_data: QuoteRequest, background_tasks: BackgroundTasks):
         result,
     )
 
-    # 4) Return JSON with quote + booking URL
     return {
         **result,
         "booking_url": booking_url,

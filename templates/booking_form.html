@@ -8,23 +8,33 @@
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
         sans-serif;
-      max-width: 600px;
+      max-width: 700px;
       margin: 0 auto;
       padding: 1.5rem;
-      background-color: #f9fafb;
+      background-color: #f7f7f7;
     }
     h1 {
-      font-size: 1.5rem;
+      font-size: 1.6rem;
+      margin-bottom: 0.5rem;
+    }
+    p.lead {
       margin-bottom: 1rem;
+      color: #555;
+      font-size: 0.95rem;
     }
     form {
       display: grid;
       gap: 1rem;
+      background: #fff;
+      padding: 1.25rem 1.5rem;
+      border-radius: 0.75rem;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.04);
     }
     label {
       font-weight: 600;
       display: block;
       margin-bottom: 0.25rem;
+      font-size: 0.9rem;
     }
     input,
     select,
@@ -35,7 +45,9 @@
       border: 1px solid #ccc;
       font-size: 0.95rem;
       box-sizing: border-box;
-      background: #ffffff;
+    }
+    input[type="checkbox"] {
+      width: auto;
     }
     button {
       padding: 0.75rem 1.25rem;
@@ -43,38 +55,66 @@
       border: none;
       font-weight: 600;
       cursor: pointer;
-      background: #111827;
-      color: #ffffff;
+      background: #2563eb;
+      color: #fff;
+      font-size: 1rem;
+    }
+    button:hover {
+      background: #1d4ed8;
     }
     .two-col {
       display: grid;
       gap: 0.75rem;
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
+    .field-group {
+      display: grid;
+      gap: 0.25rem;
+    }
+    .card {
+      border-radius: 0.75rem;
+      padding: 0.9rem 1rem;
+      background: #fafafa;
+      border: 1px solid #e3e3e3;
+    }
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin: 0.25rem 0;
+      font-size: 0.9rem;
+    }
+    .checkbox-row label {
+      margin: 0;
+      font-weight: 500;
+    }
+    .hint {
+      font-size: 0.8rem;
+      color: #6b7280;
+    }
+    .error-text {
+      color: #b91c1c;
+      font-size: 0.8rem;
+      margin-top: 0.15rem;
+    }
     @media (max-width: 600px) {
       .two-col {
         grid-template-columns: 1fr;
       }
     }
-    .availability-note {
-      font-size: 0.85rem;
-      margin-top: 0.25rem;
-      color: #6b7280;
-    }
-    .error-message {
-      font-size: 0.85rem;
-      margin-top: 0.25rem;
-      color: #b91c1c; /* red-700 */
-    }
   </style>
 </head>
 <body>
   <h1>Book Your Installation</h1>
-  <p>Choose a day and time that works for you. We’ll send a confirmation to your email.</p>
+  <p class="lead">
+    Choose a day and time that works for you. Then confirm which services
+    we’ll handle in this visit. We’ll send a confirmation to your email.
+  </p>
 
   <form method="post" action="/book">
-    <div>
-      <label for="service_type">Service</label>
+    <!-- Service selection -->
+    <div class="field-group">
+      <label for="service_type">Primary service</label>
       <select id="service_type" name="service_type" required>
         {% for s in service_types %}
         <option value="{{ s }}"
@@ -83,29 +123,97 @@
         </option>
         {% endfor %}
       </select>
+      <p class="hint">
+        Your main service will always be included in this visit.
+      </p>
     </div>
 
+    <!-- Date & time -->
     <div class="two-col">
-      <div>
+      <div class="field-group">
         <label for="appointment_date">Preferred date</label>
-        <input
-          id="appointment_date"
-          name="appointment_date"
-          type="date"
-          required
-        />
+        <input id="appointment_date" name="appointment_date" type="date" required />
       </div>
-      <div>
-        <label for="time_slot">Preferred time</label>
+      <div class="field-group">
+        <label for="time_slot">Available time</label>
         <select id="time_slot" name="time_slot" required>
-          <option value="">Select a date first</option>
+          <option value="">Select a time...</option>
         </select>
-        <p id="availability-note" class="availability-note"></p>
+        <span class="hint">
+          Times shown are based on your current schedule and other bookings.
+        </span>
       </div>
     </div>
 
+    <!-- Multi-service selection for this visit -->
+    <div class="card">
+      <label style="font-weight:600; margin-bottom:0.25rem;">
+        What should this visit include?
+      </label>
+      <p class="hint" style="margin-bottom:0.4rem;">
+        Check everything you’d like done in this single appointment.
+        Your booking length adjusts automatically based on how much we’re doing.
+      </p>
+
+      <div class="checkbox-row">
+        <input
+          id="include_tv"
+          name="include_tv"
+          type="checkbox"
+          value="true"
+          {% if prefilled.service_type == "TV Mounting" %}checked{% endif %}
+        />
+        <label for="include_tv">TV Mounting</label>
+      </div>
+
+      <div class="checkbox-row">
+        <input
+          id="include_pictures"
+          name="include_pictures"
+          type="checkbox"
+          value="true"
+          {% if prefilled.service_type == "Picture & Art Hanging" %}checked{% endif %}
+        />
+        <label for="include_pictures">Picture &amp; Art Hanging</label>
+      </div>
+
+      <div class="checkbox-row">
+        <input
+          id="include_shelves"
+          name="include_shelves"
+          type="checkbox"
+          value="true"
+          {% if prefilled.service_type == "Floating Shelves" %}checked{% endif %}
+        />
+        <label for="include_shelves">Floating Shelves</label>
+      </div>
+
+      <div class="checkbox-row">
+        <input
+          id="include_closet"
+          name="include_closet"
+          type="checkbox"
+          value="true"
+          {% if prefilled.service_type == "Closet Shelving" %}checked{% endif %}
+        />
+        <label for="include_closet">Closet Shelving / Organizers</label>
+      </div>
+
+      <div class="checkbox-row">
+        <input
+          id="include_decor"
+          name="include_decor"
+          type="checkbox"
+          value="true"
+          {% if prefilled.service_type == "Curtains & Blinds" %}checked{% endif %}
+        />
+        <label for="include_decor">Decor / Art &amp; Mirror Arrangement</label>
+      </div>
+    </div>
+
+    <!-- Contact info -->
     <div class="two-col">
-      <div>
+      <div class="field-group">
         <label for="name">Full name</label>
         <input
           id="name"
@@ -115,7 +223,7 @@
           value="{{ prefilled.name or '' }}"
         />
       </div>
-      <div>
+      <div class="field-group">
         <label for="phone">Phone</label>
         <input
           id="phone"
@@ -127,7 +235,7 @@
       </div>
     </div>
 
-    <div>
+    <div class="field-group">
       <label for="email">Email</label>
       <input
         id="email"
@@ -138,22 +246,22 @@
       />
     </div>
 
-    <div>
+    <div class="field-group">
       <label for="address">Installation address</label>
       <input
         id="address"
         name="address"
         type="text"
         required
-        placeholder="Street, city, state, ZIP (e.g. 123 Main St, Washington, DC 20001)"
+        placeholder="Street, city, state, ZIP"
         value="{{ prefilled.address or '' }}"
       />
-      {% if errors and errors.address %}
-        <p class="error-message">{{ errors.address }}</p>
+      {% if errors.address %}
+        <div class="error-text">{{ errors.address }}</div>
       {% endif %}
     </div>
 
-    <div>
+    <div class="field-group">
       <label for="notes">Notes (optional)</label>
       <textarea
         id="notes"
@@ -167,94 +275,82 @@
   </form>
 
   <script>
-    document.addEventListener("DOMContentLoaded", () => {
-      const dateInput = document.getElementById("appointment_date");
-      const timeSelect = document.getElementById("time_slot");
-      const availabilityNote = document.getElementById("availability-note");
+    // Helper: format time as "H:MM AM/PM"
+    function formatTimeLabel(isoString) {
+      const dt = new Date(isoString);
+      let hours = dt.getHours();
+      const minutes = dt.getMinutes();
+      const ampm = hours >= 12 ? "PM" : "AM";
+      hours = hours % 12;
+      if (hours === 0) hours = 12;
+      const minutesStr = minutes.toString().padStart(2, "0");
+      return `${hours}:${minutesStr} ${ampm}`;
+    }
 
-      function clearTimeOptions(message) {
-        timeSelect.innerHTML = "";
-        const opt = document.createElement("option");
-        opt.value = "";
-        opt.textContent = message;
-        opt.disabled = true;
-        opt.selected = true;
-        timeSelect.appendChild(opt);
+    async function loadAvailabilityFor(dateStr) {
+      const select = document.getElementById("time_slot");
+      select.innerHTML = '<option value="">Loading times...</option>';
+
+      if (!dateStr) {
+        select.innerHTML = '<option value="">Select a time...</option>';
+        return;
       }
 
-      async function loadAvailability() {
-        const dateValue = dateInput.value;
-        if (!dateValue) return;
-
-        clearTimeOptions("Loading available times...");
-
-        try {
-          const resp = await fetch(`/api/availability?service_date=${encodeURIComponent(dateValue)}`);
-          if (!resp.ok) {
-            clearTimeOptions("Error loading availability");
-            if (availabilityNote) {
-              availabilityNote.textContent = "We couldn't load available times. Please try again.";
-            }
-            return;
-          }
-
-          const data = await resp.json();
-          const slots = data.slots || [];
-
-          if (slots.length === 0) {
-            clearTimeOptions("No available times for this date");
-            if (availabilityNote) {
-              availabilityNote.textContent = "No available times. Try a different date.";
-            }
-            return;
-          }
-
-          timeSelect.innerHTML = "";
-          const placeholder = document.createElement("option");
-          placeholder.value = "";
-          placeholder.textContent = "Select a time";
-          placeholder.disabled = true;
-          placeholder.selected = true;
-          timeSelect.appendChild(placeholder);
-
-          slots.forEach(slot => {
-            const opt = document.createElement("option");
-            // Send ISO datetime value to backend
-            opt.value = slot.start;
-
-            let label = slot.label;
-            if (slot.is_same_day) {
-              label += " (Same-day)";
-            }
-            if (slot.is_after_hours) {
-              label += " (After-hours)";
-            }
-
-            opt.textContent = label;
-            opt.dataset.isSameDay = slot.is_same_day;
-            opt.dataset.isAfterHours = slot.is_after_hours;
-
-            timeSelect.appendChild(opt);
-          });
-
-          if (availabilityNote) {
-            availabilityNote.textContent = "";
-          }
-        } catch (err) {
-          console.error(err);
-          clearTimeOptions("Error loading availability");
-          if (availabilityNote) {
-            availabilityNote.textContent = "Something went wrong loading availability.";
-          }
+      try {
+        const resp = await fetch(`/api/availability?service_date=${encodeURIComponent(dateStr)}`);
+        if (!resp.ok) {
+          select.innerHTML = '<option value="">No times available</option>';
+          return;
         }
+        const data = await resp.json();
+        const slots = data.slots || [];
+
+        if (!slots.length) {
+          select.innerHTML = '<option value="">No times available for this day</option>';
+          return;
+        }
+
+        select.innerHTML = "";
+        for (const slot of slots) {
+          const label = `${formatTimeLabel(slot.start)} – ${formatTimeLabel(slot.end)}`;
+          const opt = document.createElement("option");
+          opt.value = slot.start; // submit the ISO start time
+          opt.textContent = label;
+          select.appendChild(opt);
+        }
+      } catch (e) {
+        console.error("Error loading availability", e);
+        select.innerHTML = '<option value="">Error loading times</option>';
       }
+    }
 
-      // When the user picks a date, fetch availability
-      dateInput.addEventListener("change", loadAvailability);
+    const dateInput = document.getElementById("appointment_date");
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, "0");
+    const dd = String(today.getDate()).padStart(2, "0");
+    const todayStr = `${yyyy}-${mm}-${dd}`;
+    dateInput.value = todayStr;
+    loadAvailabilityFor(todayStr);
 
-      // If a date is already filled for some reason, load its slots
-      if (dateInput.value) {
-        loadAvailability();
+    dateInput.addEventListener("change", (e) => {
+      loadAvailabilityFor(e.target.value);
+    });
+
+    // Ensure primary service is always included when submitting
+    document.querySelector("form").addEventListener("submit", function () {
+      const serviceType = document.getElementById("service_type").value;
+      const map = {
+        "TV Mounting": "include_tv",
+        "Picture & Art Hanging": "include_pictures",
+        "Floating Shelves": "include_shelves",
+        "Closet Shelving": "include_closet",
+        "Curtains & Blinds": "include_decor",
+      };
+      const checkboxId = map[serviceType];
+      if (checkboxId) {
+        const cb = document.getElementById(checkboxId);
+        if (cb) cb.checked = true;
       }
     });
   </script>

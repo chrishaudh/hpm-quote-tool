@@ -1,330 +1,318 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Hawkins Pro Mounting - Instant Quote</title>
+  <meta charset="UTF-8" />
+  <title>Get a Fast Quote – Hawkins Pro Mounting</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     body {
-      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-      background:#f5f5f5;
-      margin:0;
-      padding:0;
-    }
-    .shell {
-      min-height:100vh;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      padding:24px;
-    }
-    .container {
-      max-width: 600px;
-      width:100%;
-      background:#fff;
-      padding:24px 24px 28px;
-      border-radius:16px;
-      box-shadow:0 4px 16px rgba(0,0,0,0.06);
-    }
-    .logo {
-      font-weight:800;
-      letter-spacing:0.05em;
-      font-size:13px;
-      text-transform:uppercase;
-      color:#0070C9;
-    }
-    .tagline {
-      font-size:12px;
-      color:#444;
-      font-weight:500;
-      margin-top:2px;
-      margin-bottom:14px;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 1.5rem;
+      background-color: #f7f7f7;
     }
     h1 {
-      font-size: 22px;
-      margin-bottom: 6px;
+      font-size: 1.6rem;
+      margin-bottom: 0.5rem;
     }
-    p {
-      color:#555;
-      margin-top:0;
-      font-size:14px;
+    p.lead {
+      margin-bottom: 1.5rem;
+      color: #555;
+    }
+    form {
+      background: #fff;
+      border-radius: 0.75rem;
+      padding: 1.25rem 1.5rem;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+      display: grid;
+      gap: 1rem;
+    }
+    h2.section-title {
+      font-size: 1.1rem;
+      margin: 1rem 0 0.25rem;
+    }
+    h3.section-subtitle {
+      font-size: 0.95rem;
+      margin: 0.25rem 0 0.5rem;
+      color: #666;
+      font-weight: 500;
     }
     label {
-      display:block;
-      margin-top:16px;
-      font-weight:600;
-      font-size:14px;
+      font-weight: 600;
+      display: block;
+      margin-bottom: 0.25rem;
+      font-size: 0.9rem;
     }
-    select, input {
-      width:100%;
-      padding:8px 10px;
-      margin-top:6px;
-      border-radius:8px;
-      border:1px solid #ccc;
-      font-size:14px;
+    input,
+    select,
+    textarea {
+      width: 100%;
+      padding: 0.5rem;
+      border-radius: 0.4rem;
+      border: 1px solid #ccc;
+      font-size: 0.95rem;
+      box-sizing: border-box;
+    }
+    input[type="checkbox"] {
+      width: auto;
+    }
+    .field-group {
+      display: grid;
+      gap: 0.4rem;
+    }
+    .two-col {
+      display: grid;
+      gap: 0.75rem;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .card {
+      border-radius: 0.75rem;
+      padding: 0.9rem 1rem;
+      background: #fafafa;
+      border: 1px solid #e3e3e3;
+      margin-top: 0.25rem;
+    }
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin: 0.25rem 0;
+      font-size: 0.9rem;
+    }
+    .checkbox-row label {
+      margin: 0;
+      font-weight: 500;
     }
     button {
-      margin-top:24px;
-      width:100%;
-      padding:12px;
-      border:none;
-      border-radius:999px;
-      background:#0070C9;
-      color:#fff;
-      font-size:16px;
-      font-weight:600;
-      cursor:pointer;
+      padding: 0.8rem 1.25rem;
+      border-radius: 999px;
+      border: none;
+      font-weight: 600;
+      cursor: pointer;
+      background: #2563eb;
+      color: #fff;
+      font-size: 1rem;
+      margin-top: 0.5rem;
     }
     button:hover {
-      opacity:0.95;
+      background: #1d4ed8;
     }
-    .helper {
-      font-size:12px;
-      color:#777;
-    }
-    .section-title {
-      margin-top:24px;
-      font-weight:700;
-      font-size:13px;
-      text-transform:uppercase;
-      color:#555;
-    }
-    .step-indicator {
-      display:flex;
-      gap:8px;
-      font-size:12px;
-      margin-bottom:12px;
-      color:#666;
-      align-items:center;
-    }
-    .step-dot {
-      width:18px;
-      height:18px;
-      border-radius:999px;
-      border:1px solid #ccc;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      font-size:11px;
-    }
-    .step-dot.active {
-      background:#0070C9;
-      color:#fff;
-      border-color:#0070C9;
-    }
-    .step-label {
-      font-weight:600;
-    }
-    .step {
-      display:none;
-      animation: fadeIn 0.2s ease-out;
-    }
-    .step.active {
-      display:block;
-    }
-    .secondary-button {
-      margin-top:10px;
-      width:100%;
-      padding:10px;
-      border-radius:999px;
-      border:1px solid #ddd;
-      background:#f5f5f5;
-      font-size:14px;
-      font-weight:500;
-      cursor:pointer;
-    }
-    .secondary-button:hover {
-      background:#ececec;
-    }
-    .error-text {
-      margin-top:8px;
-      font-size:12px;
-      color:#c62828;
-      display:none;
-    }
-    @keyframes fadeIn {
-      from { opacity:0; transform:translateY(4px); }
-      to { opacity:1; transform:translateY(0); }
+    @media (max-width: 640px) {
+      .two-col {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="shell">
-    <div class="container">
-      <div class="logo">HAWKINS PRO MOUNTING</div>
-      <div class="tagline">Professional. Precise. Protected.</div>
+  <h1>Get a Fast Quote</h1>
+  <p class="lead">
+    Tell me what you need done. You can mix and match multiple services in one visit
+    (TV mounting, picture hanging, shelves, closet shelving, and decor).
+  </p>
 
-      <div class="step-indicator">
-        <div class="step-dot active" id="dot-step1">1</div>
-        <div class="step-label">Step 1: Contact Info</div>
+  <form method="post" action="/quote-html">
+    <!-- Contact Info -->
+    <section>
+      <h2 class="section-title">Your Info</h2>
+      <div class="two-col">
+        <div class="field-group">
+          <label for="contact_name">Name</label>
+          <input id="contact_name" name="contact_name" type="text" />
+        </div>
+        <div class="field-group">
+          <label for="contact_phone">Phone</label>
+          <input id="contact_phone" name="contact_phone" type="tel" />
+        </div>
       </div>
+      <div class="field-group">
+        <label for="contact_email">Email</label>
+        <input id="contact_email" name="contact_email" type="email" />
+      </div>
+      <div class="field-group">
+        <label for="zip_code">ZIP Code</label>
+        <input id="zip_code" name="zip_code" type="text" value="20735" />
+      </div>
+    </section>
 
-      <form method="post" action="/quote-html" id="quote-form">
-        <!-- STEP 1: CONTACT INFO -->
-        <div class="step active" id="step1">
-          <h1>Let’s Start Your Quote</h1>
-          <p>Tell us who and where you are so we can confirm service area and send updates about your quote.</p>
+    <!-- Primary Service Label -->
+    <section>
+      <h2 class="section-title">Main Service for This Visit</h2>
+      <p style="font-size:0.9rem; color:#666; margin-bottom:0.5rem;">
+        This just helps me label the job. You can still add any other services below.
+      </p>
+      <div class="field-group">
+        <label for="service">Primary service</label>
+        <select id="service" name="service">
+          <option value="tv_mounting">TV Mounting</option>
+          <option value="picture_hanging">Picture &amp; Art Hanging</option>
+          <option value="floating_shelves">Floating Shelves</option>
+          <option value="closet_shelving">Closet Shelving / Organizers</option>
+          <option value="decor">Decor / Art &amp; Mirror Arrangement</option>
+          <option value="curtains_blinds">Curtains &amp; Blinds</option>
+        </select>
+      </div>
+    </section>
 
-          <label>Your Name</label>
-          <input type="text" name="contact_name" id="contact_name" required>
-
-          <label for="contact_email">Email</label>
-          <input
-            type="email"
-            id="contact_email"
-            name="contact_email"
-            placeholder="you@example.com"
-            required
-          />
-
-          <label>Mobile Number</label>
-          <input type="tel" name="contact_phone" id="contact_phone" required placeholder="(xxx) xxx-xxxx">
-
-          <label>ZIP Code</label>
-          <input type="text" name="zip_code" id="zip_code" value="20735" required>
-
-          <div class="helper">Currently quoting within ~25 miles of ZIP 20735.</div>
-
-          <div id="contact-error" class="error-text">
-            Please fill in your name, email, mobile number, and ZIP code to continue.
+    <!-- TV Mounting -->
+    <section>
+      <h2 class="section-title">TV Mounting (optional)</h2>
+      <h3 class="section-subtitle">
+        A basic TV mounting under 60" is about $60; 60" or larger is about $70 before add-ons.
+      </h3>
+      <div class="card">
+        <div class="two-col">
+          <div class="field-group">
+            <label for="tv_size">TV size (inches)</label>
+            <input id="tv_size" name="tv_size" type="number" min="0" />
           </div>
-
-          <button type="button" onclick="goToStep2()">Continue to Service Details</button>
+          <div class="field-group">
+            <label for="wall_type">Wall type</label>
+            <select id="wall_type" name="wall_type">
+              <option value="drywall">Drywall</option>
+              <option value="brick">Brick</option>
+              <option value="concrete">Concrete</option>
+              <option value="tile/stone">Tile / Stone</option>
+            </select>
+          </div>
         </div>
 
-        <!-- STEP 2: SERVICE DETAILS -->
-        <div class="step" id="step2">
-          <div class="step-indicator" style="margin-bottom:4px;">
-            <div class="step-dot" id="dot-step2">2</div>
-            <div class="step-label">Step 2: Service Details</div>
-          </div>
-
-          <h1>What Do You Need Done?</h1>
-          <p>Choose your service and add a few details so we can calculate your estimated price.</p>
-
-          <label>Which Service Do You Need?</label>
-          <select name="service" id="service-select" required>
-            <option value="tv_mounting">TV Mounting</option>
-            <option value="picture_hanging">Picture Hanging</option>
-            <option value="floating_shelves">Floating Shelves</option>
-            <option value="closet_organizers">Closet Organizers</option>
-            <option value="decor">Décor / Art & Mirror Arrangement</option>
+        <div class="field-group">
+          <label for="conceal_type">Wire concealment</label>
+          <select id="conceal_type" name="conceal_type">
+            <option value="none">No wire concealment</option>
+            <option value="on_wall">On-wall raceway</option>
+            <option value="in_wall">In-wall concealment</option>
           </select>
-
-          <div class="section-title">Common Details</div>
-
-          <label>Wall Type</label>
-          <select name="wall_type" required>
-            <option value="drywall">Drywall</option>
-            <option value="plaster">Plaster</option>
-            <option value="brick">Brick</option>
-            <option value="tile">Tile / Stone Fireplace</option>
-          </select>
-
-          <label>Number of Items (TVs, Pictures, Shelves, Sections)</label>
-          <input type="number" name="picture_count" min="1" value="1">
-
-          <!-- TV-specific block -->
-          <div id="tv-section">
-            <div class="section-title">TV Mounting Details</div>
-
-            <label>TV Size (inches)</label>
-            <input type="number" name="tv_size" min="20" max="85">
-
-            <label>Wire Concealment</label>
-            <select name="conceal_type">
-              <option value="none">No wire hiding</option>
-              <option value="raceway">Raceway (surface channel)</option>
-              <option value="inwall">In-wall concealment</option>
-            </select>
-
-            <label>Soundbar Mounting?</label>
-            <select name="soundbar">
-              <option value="false">No</option>
-              <option value="true">Yes</option>
-            </select>
-
-            <label>LED Strip Behind TV?</label>
-            <select name="led">
-              <option value="false">No</option>
-              <option value="true">Yes</option>
-            </select>
-          </div>
-
-          <div class="section-title">Extras & Timing</div>
-
-          <label>Floating Shelves on This Job?</label>
-          <select name="shelves">
-            <option value="false">No</option>
-            <option value="true">Yes</option>
-          </select>
-
-          <label>Same-Day / Priority?</label>
-          <select name="same_day">
-            <option value="false">No</option>
-            <option value="true">Yes</option>
-          </select>
-
-          <label>After 7 PM?</label>
-          <select name="after_hours">
-            <option value="false">No</option>
-            <option value="true">Yes</option>
-          </select>
-
-          <button type="submit">Get My Instant Quote</button>
-          <button type="button" class="secondary-button" onclick="backToStep1()">← Back to Contact Info</button>
         </div>
-      </form>
-    </div>
-  </div>
 
-  <script>
-    function updateServiceVisibility() {
-      const service = document.getElementById('service-select').value;
-      const tvSection = document.getElementById('tv-section');
+        <div class="two-col">
+          <div class="checkbox-row">
+            <input id="soundbar" name="soundbar" type="checkbox" value="true" />
+            <label for="soundbar">
+              Include soundbar installation
+            </label>
+          </div>
+          <div class="checkbox-row">
+            <input id="led" name="led" type="checkbox" value="true" />
+            <label for="led">
+              LED backlighting
+            </label>
+          </div>
+        </div>
+      </div>
+    </section>
 
-      if (service === 'tv_mounting') {
-        tvSection.style.display = 'block';
-      } else {
-        tvSection.style.display = 'none';
-      }
-    }
+    <!-- Picture & Art Hanging -->
+    <section>
+      <h2 class="section-title">Picture &amp; Art Hanging (optional)</h2>
+      <h3 class="section-subtitle">
+        1–3 pictures ≈ $40, 4–5 ≈ $60, and each additional piece adds a bit more.
+      </h3>
+      <div class="card">
+        <div class="field-group">
+          <label for="picture_count">How many pictures/art pieces?</label>
+          <input id="picture_count" name="picture_count" type="number" min="0" value="0" />
+        </div>
+      </div>
+    </section>
 
-    function goToStep2() {
-      const name = document.getElementById('contact_name').value.trim();
-      const email = document.getElementById('contact_email').value.trim();
-      const phone = document.getElementById('contact_phone').value.trim();
-      const zip = document.getElementById('zip_code').value.trim();
-      const errorEl = document.getElementById('contact-error');
+    <!-- Floating Shelves -->
+    <section>
+      <h2 class="section-title">Floating Shelves (optional)</h2>
+      <div class="card">
+        <div class="checkbox-row">
+          <input id="shelves" name="shelves" type="checkbox" value="true" />
+          <label for="shelves">
+            Include floating shelves in this visit
+          </label>
+        </div>
+        <div class="field-group" style="margin-top:0.5rem;">
+          <label for="shelves_count">Approximate number of floating shelves</label>
+          <input id="shelves_count" name="shelves_count" type="number" min="0" value="0" />
+        </div>
+        <p style="font-size:0.85rem; color:#666; margin:0.25rem 0 0;">
+          This helps estimate time on-site. Pricing can be adjusted after we confirm details.
+        </p>
+      </div>
+    </section>
 
-      if (!name || !email || !phone || !zip) {
-        errorEl.style.display = 'block';
-        return;
-      } else {
-        errorEl.style.display = 'none';
-      }
+    <!-- Closet Shelving -->
+    <section>
+      <h2 class="section-title">Closet Shelving / Organizers (optional)</h2>
+      <h3 class="section-subtitle">
+        I can install closet shelving you already have, or purchase it for you and install.
+      </h3>
+      <div class="card">
+        <div class="checkbox-row">
+          <input id="closet_shelving" name="closet_shelving" type="checkbox" value="true" />
+          <label for="closet_shelving">
+            Include closet shelving / organizers in this visit
+          </label>
+        </div>
 
-      document.getElementById('step1').classList.remove('active');
-      document.getElementById('step2').classList.add('active');
+        <div class="checkbox-row" style="margin-top:0.5rem;">
+          <input id="closet_needs_materials" name="closet_needs_materials" type="checkbox" value="true" />
+          <label for="closet_needs_materials">
+            I need you to purchase the closet shelves for me
+          </label>
+        </div>
 
-      document.getElementById('dot-step1').classList.remove('active');
-      document.getElementById('dot-step2').classList.add('active');
+        <div class="field-group" style="margin-top:0.5rem;">
+          <label for="closet_shelf_count">Approximate number of closet shelves</label>
+          <input id="closet_shelf_count" name="closet_shelf_count" type="number" min="0" value="0" />
+        </div>
 
-      updateServiceVisibility();
-    }
+        <div class="checkbox-row" style="margin-top:0.25rem;">
+          <input id="closet_shelf_not_sure" name="closet_shelf_not_sure" type="checkbox" value="true" />
+          <label for="closet_shelf_not_sure">
+            I’m not sure yet on the exact number of shelves
+          </label>
+        </div>
 
-    function backToStep1() {
-      document.getElementById('step2').classList.remove('active');
-      document.getElementById('step1').classList.add('active');
+        <p style="font-size:0.85rem; color:#666; margin:0.25rem 0 0;">
+          Shelf count helps with planning, but we’ll confirm details and materials budget before purchasing anything.
+        </p>
+      </div>
+    </section>
 
-      document.getElementById('dot-step2').classList.remove('active');
-      document.getElementById('dot-step1').classList.add('active');
-    }
+    <!-- Decor / Art & Mirror Arrangement -->
+    <section>
+      <h2 class="section-title">Decor / Art &amp; Mirror Arrangement (optional)</h2>
+      <div class="card">
+        <div class="field-group">
+          <label for="decor_count">How many decor pieces or mirrors?</label>
+          <input id="decor_count" name="decor_count" type="number" min="0" value="0" />
+        </div>
+        <p style="font-size:0.85rem; color:#666; margin:0.25rem 0 0;">
+          This covers arranging & hanging decor or mirrors to complete the space.
+        </p>
+      </div>
+    </section>
 
-    document.addEventListener('DOMContentLoaded', function () {
-      const serviceSelect = document.getElementById('service-select');
-      serviceSelect.addEventListener('change', updateServiceVisibility);
-      updateServiceVisibility();
-    });
-  </script>
+    <!-- Visit modifiers -->
+    <section>
+      <h2 class="section-title">Timing Preferences</h2>
+      <div class="card">
+        <div class="two-col">
+          <div class="checkbox-row">
+            <input id="same_day" name="same_day" type="checkbox" value="true" />
+            <label for="same_day">
+              I’m hoping for same-day service if available
+            </label>
+          </div>
+          <div class="checkbox-row">
+            <input id="after_hours" name="after_hours" type="checkbox" value="true" />
+            <label for="after_hours">
+              I’m flexible on evenings / after 5 PM
+            </label>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <button type="submit">Get My Estimate</button>
+  </form>
 </body>
 </html>

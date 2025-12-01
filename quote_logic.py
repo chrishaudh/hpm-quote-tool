@@ -1,179 +1,274 @@
-def lookup_tax_rate(zip_code: str) -> float:
+# quote_logic.py
+
+from typing import Dict, Any
+from dataclasses import dataclass
+
+
+@dataclass
+class TaxConfig:
+    default_rate: float = 0.06  # 6% as a simple default
+
+
+TAX_CONFIG = TaxConfig()
+
+
+def determine_tax_rate(zip_code: str) -> float:
     """
-    Return the sales tax rate as a decimal based on ZIP code.
-    Simple internal mapping for DMV area around 20735.
+    Very simple tax logic (you can refine later).
+    For now, treat DC / MD / VA in your area as ~6%.
     """
-    z = str(zip_code).strip()
+    zip_str = str(zip_code or "").strip()
 
-    if len(z) < 5 or not z.isdigit():
-        return 0.06  # default fallback
+    if not zip_str:
+        return TAX_CONFIG.default_rate
 
-    prefix3 = z[:3]
+    # You can customize this by prefixes if you want
+    return TAX_CONFIG.default_rate
 
-    TAX_BY_PREFIX = {
-        # Maryland (statewide 6%)
-        "206": 0.06,
-        "207": 0.06,
-        "208": 0.06,
 
-        # Washington, DC (6.5%)
-        "200": 0.065,
-        "203": 0.065,
-        "204": 0.065,
-        "205": 0.065,
+def price_tv_mounting(tv_size: int) -> float:
+    """
+    Base TV mounting pricing (no wall-type or add-ons yet):
 
-        # Northern Virginia (close-in NoVA, ~6%)
-        "220": 0.06,
-        "221": 0.06,
-        "222": 0.06,
-        "223": 0.06,
-    }
+    - Under 60 inches: $60
+    - 60 inches or more: $70
+    """
+    if tv_size <= 0:
+        return 0.0
 
-    return TAX_BY_PREFIX.get(prefix3, 0.06)
+    if tv_size < 60:
+        return 60.0
+    else:
+        return 70.0
+
+
+def adjust_for_wall_type(base_price: float, wall_type: str) -> float:
+    """
+    Simple wall-type adjustments (you can tweak numbers):
+
+    - drywall: +$0
+    - brick:   +$20
+    - concrete / stone / tile: +$30
+    """
+    wt = (wall_type or "").lower()
+
+    if wt in ("brick",):
+        return base_price + 20.0
+    elif wt in ("concrete", "stone", "tile", "tile/stone"):
+        return base_price + 30.0
+    else:
+        # drywall or unknown
+        return base_price
+
+
+def adjust_for_concealment(base_price: float, conceal_type: str) -> float:
+    """
+    Concealment adjustments (you can tweak):
+
+    - none:      +$0
+    - on_wall:   +$40
+    - in_wall:   +$80
+    """
+    ct = (conceal_type or "").lower()
+
+    if ct in ("on_wall", "on-wall", "raceway"):
+        return base_price + 40.0
+    elif ct in ("in_wall", "in-wall"):
+        return base_price + 80.0
+    else:
+        return base_price
+
+
+def price_picture_hanging(picture_count: int) -> float:
+    """
+    Picture & Art Hanging pricing:
+
+    - 1–3 pictures: $40
+    - 4–5 pictures: $60
+    - >5 pictures:  $60 + $10 per additional picture beyond 5
+    """
+    count = max(0, int(picture_count))
+
+    if count == 0:
+        return 0.0
+    elif count <= 3:
+        return 40.0
+    elif count <= 5:
+        return 60.0
+    else:
+        extra = count - 5
+        return 60.0 + 10.0 * extra
+
+
+def price_floating_shelves(has_shelves: bool) -> float:
+    """
+    Simple placeholder pricing for floating shelves as part of the visit.
+    For now this is a flat amount if shelves are included; the shelf count is
+    carried through to the result for display but does not change the price.
+    """
+    return 50.0 if has_shelves else 0.0
+
+
+def price_closet_shelving(closet_shelving: bool, closet_needs_materials: bool) -> float:
+    """
+    Closet Shelving (aka closet organizers):
+
+    - Base labor (closet_shelving = True): $80
+
+    For now, closet_needs_materials and closet_shelf_count are informational and
+    do NOT change the price automatically. You can tweak this later.
+    """
+    if not closet_shelving:
+        return 0.0
+
+    base = 80.0
+    return base
+
+
+def price_decor(decor_count: int) -> float:
+    """
+    Decor / Art & Mirror Arrangement:
+
+    Simple per-item pricing for now:
+    - $15 per piece
+    """
+    count = max(0, int(decor_count))
+    if count == 0:
+        return 0.0
+    return 15.0 * count
+
+
+def price_tv_addons(base_price: float, soundbar: bool, led: bool) -> float:
+    """
+    Add-on pricing for TV mounting:
+
+    - Soundbar: +$20
+    - LED lights: +$10
+    """
+    total = base_price
+    if soundbar:
+        total += 20.0
+    if led:
+        total += 10.0
+    return total
 
 
 def calculate_quote(
+    *,
     service: str,
-    tv_size: int = 0,
-    wall_type: str = "drywall",
-    conceal_type: str = "none",
-    soundbar: bool = False,
-    shelves: bool = False,
-    picture_count: int = 0,
-    led: bool = False,
-    same_day: bool = False,
-    after_hours: bool = False,
-    zip_code: str = "20735",
-) -> dict:
+    tv_size: int,
+    wall_type: str,
+    conceal_type: str,
+    soundbar: bool,
+    shelves: bool,
+    picture_count: int,
+    led: bool,
+    same_day: bool,
+    after_hours: bool,
+    zip_code: str,
+    closet_shelving: bool = False,
+    closet_needs_materials: bool = False,
+    decor_count: int = 0,
+    shelves_count: int = 0,
+    closet_shelf_count: int = 0,
+    closet_shelf_not_sure: bool = False,
+) -> Dict[str, Any]:
     """
-    Multi-service quote calculation.
+    Main quote calculator.
 
-    service:
-      - "tv_mounting"
-      - "picture_hanging"
-      - "floating_shelves"
-      - "closet_organizers"
-      - "decor"
+    IMPORTANT:
+    - `service` is the primary service (for labeling), but pricing is built
+      from the individual components (TV, pictures, shelves, closet, decor).
+    - This means you can mix & match services in one visit (multi-service).
+
+    Shelf counts are carried through for clarity on the quote, but they do
+    not currently change pricing automatically.
     """
 
-    wall_fee_map = {
-        "drywall": 0,
-        "plaster": 20,
-        "brick": 30,
-        "tile": 40,
+    # 1) TV Mounting (can be primary OR add-on)
+    tv_base = price_tv_mounting(tv_size)
+    tv_with_wall = adjust_for_wall_type(tv_base, wall_type)
+    tv_with_concealment = adjust_for_concealment(tv_with_wall, conceal_type)
+    tv_total = price_tv_addons(tv_with_concealment, soundbar, led)
+
+    if tv_size <= 0:
+        tv_total = 0.0
+
+    # 2) Picture Hanging
+    picture_total = price_picture_hanging(picture_count)
+
+    # 3) Floating Shelves
+    shelves_total = price_floating_shelves(shelves)
+
+    # 4) Closet Shelving (Closet Organizers)
+    closet_total = price_closet_shelving(closet_shelving, closet_needs_materials)
+
+    # 5) Decor / Art & Mirror Arrangement
+    decor_total = price_decor(decor_count)
+
+    # 6) Multi-service discount (optional, small)
+    chargeable_components = [
+        tv_total > 0,
+        picture_total > 0,
+        shelves_total > 0,
+        closet_total > 0,
+        decor_total > 0,
+    ]
+    num_services = sum(1 for c in chargeable_components if c)
+    multi_service_discount = 0.0
+    if num_services >= 2:
+        # e.g., small $10 discount for booking 2+ services at once
+        multi_service_discount = -10.0
+
+    # 7) Same-day / after-hours surcharges in the quote
+    # To avoid double-charging (you already add surcharges in booking),
+    # keep these at 0.0 for now.
+    same_day_surcharge = 0.0
+    after_hours_surcharge = 0.0
+
+    # 8) Sum everything
+    line_items = {
+        "tv_total": round(tv_total, 2),
+        "picture_total": round(picture_total, 2),
+        "shelves_total": round(shelves_total, 2),
+        "closet_total": round(closet_total, 2),
+        "decor_total": round(decor_total, 2),
+        "multi_service_discount": round(multi_service_discount, 2),
+        "same_day_surcharge": round(same_day_surcharge, 2),
+        "after_hours_surcharge": round(after_hours_surcharge, 2),
     }
-    wall_fee = wall_fee_map.get(wall_type, 0)
 
-    base = 0
-    conceal_fee = 0
-    addons = 0
-    discount = 0
+    subtotal_before_tax = round(
+        tv_total
+        + picture_total
+        + shelves_total
+        + closet_total
+        + decor_total
+        + multi_service_discount
+        + same_day_surcharge
+        + after_hours_surcharge,
+        2,
+    )
 
-    # Always treat picture_count as "number of items" for non-TV work
-    items = max(picture_count, 0)
-
-    # ---- TV MOUNTING SERVICE ----
-    if service == "tv_mounting":
-        # Base by TV size
-        if tv_size and tv_size <= 60:
-            base = 75
-        elif tv_size and tv_size <= 85:
-            base = 95
-        else:
-            # Very large TV or missing size: use a safe higher base
-            base = 120
-
-        # Concealment only matters for TV jobs
-        conceal_fee_map = {
-            "none": 0,
-            "raceway": 25,
-            "inwall": 60,
-        }
-        conceal_fee = conceal_fee_map.get(conceal_type, 0)
-
-        services_selected = 1  # TV is 1 service
-
-        if soundbar:
-            addons += 20
-            services_selected += 1
-
-        # shelves on the same visit
-        if shelves:
-            addons += 25
-            services_selected += 1
-
-        # pictures / décor as add-on to TV job
-        if items > 0:
-            addons += 20 + max(items - 1, 0) * 10
-            services_selected += 1
-
-        if led:
-            addons += 15
-            services_selected += 1
-
-        # Multi-service discount only for TV combos
-        if services_selected >= 3:
-            discount = 20
-        elif services_selected == 2:
-            discount = 10
-
-    # ---- PICTURE HANGING & DECOR ONLY ----
-    elif service in ("picture_hanging", "decor"):
-        # Base covers up to 2 items
-        if items <= 0:
-            items = 1
-        base = 40
-        if items > 2:
-            base += (items - 2) * 10
-        # No concealment here
-        conceal_fee = 0
-        discount = 0
-
-    # ---- FLOATING SHELVES ONLY ----
-    elif service == "floating_shelves":
-        # Interpret items as number of shelves
-        if items <= 0:
-            items = 1
-        base = 50 + max(items - 1, 0) * 25
-        conceal_fee = 0
-        discount = 0
-
-    # ---- CLOSET ORGANIZERS ----
-    elif service == "closet_organizers":
-        # Flat base for typical closet, items can represent sections
-        base = 120
-        if items > 1:
-            base += (items - 1) * 20
-        conceal_fee = 0
-        discount = 0
-
-    else:
-        # Fallback: treat as basic service
-        base = 75
-        conceal_fee = 0
-        discount = 0
-
-    # Same-day / after-hours apply to all services
-    if same_day:
-        addons += 15
-    if after_hours:
-        addons += 20
-
-    subtotal = base + wall_fee + conceal_fee + addons - discount
-
-    tax_rate = lookup_tax_rate(zip_code)
-    total_with_tax = subtotal * (1 + tax_rate)
-    final_total = round(total_with_tax)
+    tax_rate = determine_tax_rate(zip_code)
+    tax_amount = round(subtotal_before_tax * tax_rate, 2)
+    estimated_total_with_tax = round(subtotal_before_tax + tax_amount, 2)
 
     return {
-        "line_items": {
-            "base_mounting": base,
-            "wall_type_adjustment": wall_fee,
-            "wire_concealment": conceal_fee,
-            "addons": addons,
-            "multi_service_discount": -discount,
-        },
+        "service": service,
+        "line_items": line_items,
+        "subtotal_before_tax": subtotal_before_tax,
         "tax_rate": tax_rate,
-        "subtotal_before_tax": subtotal,
-        "estimated_total_with_tax": final_total,
+        "tax_amount": tax_amount,
+        "estimated_total_with_tax": estimated_total_with_tax,
+        "num_services": num_services,
+
+        # extra context surfaced on the result page
+        "closet_needs_materials": closet_needs_materials,
+        "decor_count": decor_count,
+        "picture_count": picture_count,
+        "tv_size": tv_size,
+        "shelves_count": shelves_count,
+        "closet_shelf_count": closet_shelf_count,
+        "closet_shelf_not_sure": closet_shelf_not_sure,
     }

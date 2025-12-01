@@ -1,114 +1,300 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Your Mounting Quote - Hawkins Pro Mounting</title>
+  <meta charset="UTF-8" />
+  <title>Your Quote – Hawkins Pro Mounting</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body { font-family:-apple-system, BlinkMacSystemFont, sans-serif; background:#f0f2f5; margin:0; padding:0; }
-    .shell { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
-    .card { max-width:640px; width:100%; background:#fff; padding:24px 24px 28px; border-radius:20px; box-shadow:0 14px 35px rgba(0,0,0,0.08); }
-    .brand-row { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
-    .logo { font-weight:800; letter-spacing:0.05em; font-size:13px; text-transform:uppercase; color:#0070C9; }
-    .pill { font-size:11px; padding:3px 9px; border-radius:999px; background:#f0f4ff; color:#264b7f; }
-    h1 { font-size:22px; margin:4px 0 4px; }
-    p { color:#555; margin-top:4px; font-size:14px; }
-    .line-items { margin-top:16px; font-size:14px; border-top:1px solid #eee; padding-top:10px; }
-    .line-items-row { display:flex; justify-content:space-between; margin-bottom:6px; }
-    .muted { color:#777; font-size:12px; }
-    .total-box { margin-top:16px; padding:14px 14px 12px; border-radius:14px; background:#f5f9ff; border:1px solid #d4e3ff; }
-    .total-label { font-size:12px; text-transform:uppercase; letter-spacing:0.06em; color:#4b6aa6; }
-    .total-amount { font-size:24px; font-weight:800; margin-top:4px; }
-    .tag-row { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; }
-    .tag { display:inline-flex; align-items:center; padding:3px 9px; border-radius:999px; font-size:11px; background:#edf2ff; color:#364fc7; }
-    .tag-dot { width:6px; height:6px; border-radius:999px; background:#00c853; margin-right:6px; }
-    .buttons { display:flex; flex-direction:column; gap:10px; margin-top:22px; }
-    .btn { text-align:center; padding:12px; border-radius:999px; font-weight:600; text-decoration:none; display:block; font-size:15px; }
-    .btn-primary { background:#0070C9; color:#fff; box-shadow:0 4px 10px rgba(0,112,201,0.28); }
-    .btn-primary:hover { filter:brightness(0.96); }
-    .btn-secondary { background:#f3f3f3; color:#333; border:1px solid #ddd; }
-    .btn-secondary:hover { background:#e9e9e9; }
-    .footnote { font-size:11px; color:#777; margin-top:14px; line-height:1.4; }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 1.5rem;
+      background-color: #f7f7f7;
+      color: #111827;
+    }
+    h1 {
+      font-size: 1.6rem;
+      margin-bottom: 0.5rem;
+    }
+    p.lead {
+      margin-bottom: 1.25rem;
+      color: #4b5563;
+    }
+    .card {
+      background: #ffffff;
+      border-radius: 0.75rem;
+      padding: 1.25rem 1.5rem;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.05);
+      margin-bottom: 1.25rem;
+    }
+    h2.section-title {
+      font-size: 1.1rem;
+      margin: 0 0 0.5rem;
+    }
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 0.95rem;
+      padding: 0.25rem 0;
+    }
+    .summary-row.total {
+      font-weight: 700;
+      font-size: 1.05rem;
+      border-top: 1px solid #e5e7eb;
+      margin-top: 0.5rem;
+      padding-top: 0.5rem;
+    }
+    .summary-label {
+      color: #4b5563;
+    }
+    .summary-value {
+      font-weight: 600;
+    }
+    .muted {
+      font-size: 0.85rem;
+      color: #6b7280;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      background: #eff6ff;
+      color: #1d4ed8;
+      margin-left: 0.25rem;
+    }
+    .line-items {
+      margin-top: 0.5rem;
+      border-top: 1px solid #e5e7eb;
+      padding-top: 0.5rem;
+    }
+    .line-item-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 0.9rem;
+      padding: 0.15rem 0;
+    }
+    .line-item-label {
+      color: #374151;
+    }
+    .line-item-value {
+      font-weight: 600;
+    }
+    .line-item-negative {
+      color: #b91c1c;
+    }
+
+    .cta-card {
+      background: #ffffff;
+      border-radius: 0.75rem;
+      padding: 1.25rem 1.5rem;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.05);
+    }
+    .cta-card p {
+      margin: 0.15rem 0;
+      font-size: 0.9rem;
+      color: #4b5563;
+    }
+    .cta-card p strong {
+      color: #111827;
+    }
+
+    .cta-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      margin-top: 1.25rem;
+    }
+    .cta-buttons a {
+      display: block;
+      width: 100%;
+      text-align: center;
+      padding: 0.85rem 1.25rem;
+      border-radius: 999px;
+      font-weight: 600;
+      text-decoration: none;
+      box-sizing: border-box;
+      font-size: 1rem;
+    }
+    .btn-primary {
+      background: #2563eb;
+      color: #ffffff;
+    }
+    .btn-primary:hover {
+      background: #1d4ed8;
+    }
+    .btn-secondary {
+      background: #e5e7eb;
+      color: #111827;
+    }
+    .btn-secondary:hover {
+      background: #d1d5db;
+    }
+
+    @media (max-width: 640px) {
+      body {
+        padding: 1rem;
+      }
+      .card,
+      .cta-card {
+        padding: 1rem 1.1rem;
+      }
+    }
   </style>
 </head>
 <body>
-  <div class="shell">
-    <div class="card">
-      <div class="brand-row">
-        <div>
-          <div class="logo">HAWKINS PRO MOUNTING</div>
-          <h1>Your Instant Quote</h1>
-        </div>
-        <div class="pill">No surprise charges</div>
-      </div>
+  <h1>Your Estimate</h1>
+  <p class="lead">
+    Here’s a rough estimate for your install based on the details you entered.
+    Final pricing may adjust slightly after we confirm the details on-site.
+  </p>
 
-      <p>
-        {% if contact_name and contact_name.strip() %}
-          Thanks, {{ contact_name }}. 
-        {% else %}
-          Thanks.
-        {% endif %}
-        Here’s your estimated price based on the details you provided. This includes estimated tax for your service area.
-      </p>
+  <!-- Summary Card -->
+  <div class="card">
+    <h2 class="section-title">
+      Estimate Summary
+      {% if num_services and num_services > 1 %}
+        <span class="pill">{{ num_services }} services in one visit</span>
+      {% endif %}
+    </h2>
 
-      <div class="line-items">
-        <div class="line-items-row">
-          <span>Base Service</span>
-          <span>${{ line_items.base_mounting }}</span>
-        </div>
-        <div class="line-items-row">
-          <span>Wall Type Adjustment</span>
-          <span>${{ line_items.wall_type_adjustment }}</span>
-        </div>
-        <div class="line-items-row">
-          <span>Wire Concealment</span>
-          <span>${{ line_items.wire_concealment }}</span>
-        </div>
-        <div class="line-items-row">
-          <span>Add-Ons</span>
-          <span>${{ line_items.addons }}</span>
-        </div>
-        <div class="line-items-row muted">
-          <span>Multi-Service Discount</span>
-          <span>${{ line_items.multi_service_discount }}</span>
-        </div>
-      </div>
+    <div class="summary-row">
+      <span class="summary-label">Subtotal before tax</span>
+      <span class="summary-value">${{ '%.2f' % subtotal_before_tax }}</span>
+    </div>
+    <div class="summary-row">
+      <span class="summary-label">Estimated tax ({{ '%.1f' % (tax_rate * 100) }}%)</span>
+      <span class="summary-value">${{ '%.2f' % tax_amount }}</span>
+    </div>
+    <div class="summary-row total">
+      <span class="summary-label">Estimated total</span>
+      <span class="summary-value">${{ '%.2f' % estimated_total_with_tax }}</span>
+    </div>
 
-      <div class="total-box">
-        <div class="total-label">Estimated total (tax included)</div>
-        <div class="total-amount">${{ estimated_total_with_tax }}</div>
-        <div class="tag-row">
-          <div class="tag">
-            <span class="tag-dot"></span>
-            Tax rate applied: {{ (tax_rate * 100) | round(2) }}%
-          </div>
-          <div class="tag">Within ~25 miles of 20735</div>
+    <p class="muted" style="margin-top:0.4rem;">
+      This estimate is based on the information you provided and typical conditions.
+      If anything looks off, you can always ask questions before booking.
+    </p>
+  </div>
+
+  <!-- Line Items Card -->
+  <div class="card">
+    <h2 class="section-title">What’s Included in This Estimate</h2>
+
+    <div class="line-items">
+      {% set li = line_items or {} %}
+
+      {% if li.tv_total and li.tv_total != 0 %}
+        <div class="line-item-row">
+          <span class="line-item-label">
+            TV mounting
+            {% if tv_size and tv_size > 0 %}
+              ({{ tv_size }}")
+            {% endif %}
+          </span>
+          <span class="line-item-value">${{ '%.2f' % li.tv_total }}</span>
         </div>
-      </div>
+      {% endif %}
 
-      <div class="buttons">
-        <!-- Book This Install: sends data into your /book route so only quote users can book -->
-        <form action="/book" method="get">
-          <input type="hidden" name="service_type" value="{{ service | default('') }}">
-          <input type="hidden" name="name" value="{{ contact_name | default('') }}">
-          <input type="hidden" name="email" value="{{ contact_email | default('') }}">
-          <input type="hidden" name="phone" value="{{ contact_phone | default('') }}">
-          <!-- address is not collected in quote; booking form will ask for it -->
-          <button type="submit" class="btn btn-primary">
-            Book This Install
-          </button>
-        </form>
+      {% if li.picture_total and li.picture_total != 0 %}
+        <div class="line-item-row">
+          <span class="line-item-label">
+            Picture &amp; art hanging
+            {% if picture_count and picture_count > 0 %}
+              ({{ picture_count }} pieces)
+            {% endif %}
+          </span>
+          <span class="line-item-value">${{ '%.2f' % li.picture_total }}</span>
+        </div>
+      {% endif %}
 
-        <!-- Ask a question via email -->
-        <a href="mailto:info@hawkinspromounting.com?subject=Question about my mounting/installation quote"
-           class="btn btn-secondary">
-          Ask a Question First
-        </a>
-      </div>
+      {% if li.shelves_total and li.shelves_total != 0 %}
+        <div class="line-item-row">
+          <span class="line-item-label">Floating shelves</span>
+          <span class="line-item-value">${{ '%.2f' % li.shelves_total }}</span>
+        </div>
+      {% endif %}
 
-      <div class="footnote">
-        This is an estimate based on typical installations within ~25 miles of ZIP 20735. 
-        Final pricing may adjust slightly based on on-site conditions (stud locations, wall material, existing damage, or special requests).
-      </div>
+      {% if li.closet_total and li.closet_total != 0 %}
+        <div class="line-item-row">
+          <span class="line-item-label">
+            Closet shelving / organizers
+            {% if closet_needs_materials %}
+              <span class="muted">(materials purchase requested)</span>
+            {% endif %}
+          </span>
+          <span class="line-item-value">${{ '%.2f' % li.closet_total }}</span>
+        </div>
+      {% endif %}
+
+      {% if li.decor_total and li.decor_total != 0 %}
+        <div class="line-item-row">
+          <span class="line-item-label">
+            Decor / art &amp; mirror arrangement
+            {% if decor_count and decor_count > 0 %}
+              ({{ decor_count }} pieces)
+            {% endif %}
+          </span>
+          <span class="line-item-value">${{ '%.2f' % li.decor_total }}</span>
+        </div>
+      {% endif %}
+
+      {% if li.same_day_surcharge and li.same_day_surcharge != 0 %}
+        <div class="line-item-row">
+          <span class="line-item-label">Same-day preference surcharge</span>
+          <span class="line-item-value">${{ '%.2f' % li.same_day_surcharge }}</span>
+        </div>
+      {% endif %}
+
+      {% if li.after_hours_surcharge and li.after_hours_surcharge != 0 %}
+        <div class="line-item-row">
+          <span class="line-item-label">After-hours preference surcharge</span>
+          <span class="line-item-value">${{ '%.2f' % li.after_hours_surcharge }}</span>
+        </div>
+      {% endif %}
+
+      {% if li.multi_service_discount and li.multi_service_discount != 0 %}
+        <div class="line-item-row">
+          <span class="line-item-label">Multi-service discount</span>
+          <span class="line-item-value line-item-negative">
+            ${{ '%.2f' % li.multi_service_discount }}
+          </span>
+        </div>
+      {% endif %}
+    </div>
+
+    <p class="muted" style="margin-top:0.5rem;">
+      If you selected closet shelving with materials, I’ll confirm shelf style and
+      materials budget with you before purchasing anything.
+    </p>
+  </div>
+
+  <!-- CTA Card -->
+  <div class="cta-card">
+    <h2 class="section-title">Next Steps</h2>
+    <p>
+      <strong>Ready to go?</strong> You can lock in a time on the schedule right now.
+    </p>
+    <p>
+      Prefer to double-check something first?
+      You can send a quick question by email before you book.
+    </p>
+
+    <div class="cta-buttons">
+      <a href="{{ booking_url }}" class="btn-primary">
+        Book This Install
+      </a>
+
+      <a href="mailto:{{ contact_email or 'hawkinspromounting@gmail.com' }}?subject=Question%20about%20my%20quote"
+         class="btn-secondary">
+        Ask a Question First
+      </a>
     </div>
   </div>
 </body>
