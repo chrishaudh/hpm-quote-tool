@@ -246,19 +246,62 @@
       />
     </div>
 
+    <!-- Address split into street / city / state / ZIP -->
     <div class="field-group">
-      <label for="address">Installation address</label>
+      <label for="address_street">Installation address – Street</label>
       <input
-        id="address"
-        name="address"
+        id="address_street"
+        name="address_street"
         type="text"
         required
-        placeholder="Street, city, state, ZIP"
-        value="{{ prefilled.address or '' }}"
+        placeholder="8112 Holly Ln"
+        value="{{ prefilled.address_street or '' }}"
+      />
+    </div>
+
+    <div class="two-col">
+      <div class="field-group">
+        <label for="address_city">City</label>
+        <input
+          id="address_city"
+          name="address_city"
+          type="text"
+          required
+          placeholder="Clinton"
+          value="{{ prefilled.address_city or '' }}"
+        />
+      </div>
+      <div class="field-group">
+        <label for="address_state">State</label>
+        <input
+          id="address_state"
+          name="address_state"
+          type="text"
+          required
+          maxlength="2"
+          placeholder="MD"
+          value="{{ prefilled.address_state or '' }}"
+          style="text-transform: uppercase;"
+        />
+      </div>
+    </div>
+
+    <div class="field-group">
+      <label for="address_zip">ZIP code</label>
+      <input
+        id="address_zip"
+        name="address_zip"
+        type="text"
+        required
+        placeholder="20735"
+        value="{{ prefilled.address_zip or '' }}"
       />
       {% if errors.address %}
         <div class="error-text">{{ errors.address }}</div>
       {% endif %}
+      <p class="hint">
+        Currently serving DC, Maryland, and Northern Virginia.
+      </p>
     </div>
 
     <div class="field-group">

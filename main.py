@@ -22,7 +22,6 @@ templates = Jinja2Templates(directory="templates")
 # Service + Zapier configuration
 # ---------------------------------
 
-# Service types used in both GET /book and POST /book
 SERVICE_TYPES = [
     "TV Mounting",
     "Picture & Art Hanging",
@@ -31,27 +30,17 @@ SERVICE_TYPES = [
     "Closet Shelving",
 ]
 
-# States you serve (for basic service-area validation)
 SERVICE_AREA_STATES = {"DC", "MD", "VA"}
 
-# Simple ZIP pattern: 5 digits or ZIP+4
 ZIP_RE = re.compile(r"^\d{5}(?:-\d{4})?$")
 
-# --- Surcharge configuration (edit these to your liking) ---
-
-SAME_DAY_SURCHARGE = 25.0          # e.g. $25 extra for same-day
-AFTER_HOURS_SURCHARGE = 25.0       # e.g. $25 extra for after-hours
-
-# Hour (24h) at or after which a job is considered after-hours
+SAME_DAY_SURCHARGE = 25.0
+AFTER_HOURS_SURCHARGE = 25.0
 AFTER_HOURS_START_HOUR = 18
 
-# Your Zapier webhook for QUOTES
 ZAPIER_WEBHOOK_URL = "https://hooks.zapier.com/hooks/catch/25408903/uz2ihgh/"
-
-# Your Zapier webhook for BOOKINGS (email confirmations)
 BOOKING_WEBHOOK_URL = "https://hooks.zapier.com/hooks/catch/25408903/ukipdo4/"
 
-# Calendar ID (you can change this later if you use a non-primary calendar)
 CALENDAR_ID = "primary"
 
 
@@ -65,13 +54,6 @@ def compute_booking_duration_hours(
     include_closet: bool,
     include_decor: bool,
 ) -> float:
-    """
-    Very simple multi-service duration logic:
-
-    - If 0 or 1 service selected: 2 hours
-    - If 2 services selected: 3 hours
-    - If 3+ services selected: 4 hours
-    """
     flags = [include_tv, include_pictures, include_shelves, include_closet, include_decor]
     count = sum(1 for f in flags if f)
 
@@ -84,44 +66,33 @@ def compute_booking_duration_hours(
 
 
 # =====================================================
-# Address validation helper
+# Address validation helper (now uses separate fields)
 # =====================================================
-
-def validate_address(address: str):
+def validate_address(
+    street: str,
+    city: str,
+    state: str,
+    zip_code: str,
+):
     """
-    Basic address validation.
+    Basic address validation for separate inputs.
 
     Returns:
         (is_valid: bool, parsed: dict, error_message: str)
     """
-    addr = (address or "").strip()
-    if not addr:
-        return False, {}, "Please enter the installation address."
+    street = (street or "").strip()
+    city = (city or "").strip()
+    state = (state or "").strip().upper()
+    zip_code = (zip_code or "").strip()
 
-    # Expect something like:
-    # "123 Main St, Washington, DC 20001"
-    parts = [p.strip() for p in addr.split(",") if p.strip()]
-    if len(parts) < 3:
-        return (
-            False,
-            {},
-            "Please include street, city, state, and ZIP code (e.g. 123 Main St, Washington, DC 20001).",
-        )
-
-    street = parts[0]
-    city = parts[1]
-    state_zip = parts[-1]
-
-    tokens = state_zip.split()
-    if len(tokens) < 2:
-        return (
-            False,
-            {},
-            "Please include a 2-letter state and 5-digit ZIP code (e.g. DC 20001).",
-        )
-
-    state = tokens[0].upper()
-    zip_code = tokens[-1]
+    if not street:
+        return False, {}, "Please enter the street address."
+    if not city:
+        return False, {}, "Please enter the city."
+    if not state:
+        return False, {}, "Please enter the state (e.g. DC, MD, VA)."
+    if not zip_code:
+        return False, {}, "Please enter the ZIP code."
 
     # State: must be 2 letters
     if len(state) != 2 or not state.isalpha():
@@ -184,10 +155,6 @@ async def test_book():
 async def api_get_availability(
     service_date: str = Query(..., description="Date in YYYY-MM-DD"),
 ):
-    """
-    Return available time slots for a given date.
-    This uses your Google Calendar free/busy + business rules.
-    """
     try:
         dt: date = datetime.strptime(service_date, "%Y-%m-%d").date()
     except ValueError:
@@ -207,20 +174,16 @@ async def show_booking_form(
     name: Optional[str] = Query(None),
     email: Optional[str] = Query(None),
     phone: Optional[str] = Query(None),
-    address: Optional[str] = Query(None),
 ):
-    """
-    Booking form is ONLY intended to be accessed after someone completes
-    a quote. The quote tool sends service_type, name, email, phone, address
-    as query parameters. We pre-fill the booking form with those values.
-    """
-
     prefilled = {
         "service_type": service_type,
         "name": name,
         "email": email,
         "phone": phone,
-        "address": address,
+        "address_street": "",
+        "address_city": "",
+        "address_state": "",
+        "address_zip": "",
     }
 
     return templates.TemplateResponse(
@@ -229,7 +192,7 @@ async def show_booking_form(
             "request": request,
             "service_types": SERVICE_TYPES,
             "prefilled": prefilled,
-            "errors": {},  # no errors on initial load
+            "errors": {},
         },
     )
 
@@ -243,12 +206,12 @@ async def submit_booking(
     background_tasks: BackgroundTasks,
     service_type: str = Form(...),
 
-    # NEW STYLE: ISO datetime string from availability dropdown
+    # New style: ISO datetime string from availability dropdown
     time_slot: Optional[str] = Form(None),
 
-    # LEGACY STYLE: separate date + time fields (kept for backward compatibility)
-    appointment_date: Optional[str] = Form(None),   # yyyy-mm-dd
-    appointment_time: Optional[str] = Form(None),   # HH:MM
+    # Legacy style (kept just in case)
+    appointment_date: Optional[str] = Form(None),
+    appointment_time: Optional[str] = Form(None),
 
     # Multi-service selections for this visit
     include_tv: str = Form("false"),
@@ -261,28 +224,37 @@ async def submit_booking(
     name: str = Form(...),
     email: str = Form(...),
     phone: str = Form(...),
-    address: str = Form(...),
+
+    # NEW: Separate address fields
+    address_street: str = Form(...),
+    address_city: str = Form(...),
+    address_state: str = Form(...),
+    address_zip: str = Form(...),
+
     notes: str = Form(""),
 ):
-    """
-    Handles booking submissions.
-
-    Booking duration is dynamic based on which services are included in this visit.
-    """
     tz = pytz.timezone(TIMEZONE)
 
     def to_bool(value: str) -> bool:
         return str(value).lower() == "true"
 
-    # 0) Validate address
-    is_valid_address, parsed_address, addr_error = validate_address(address)
+    # 0) Validate address using separate fields
+    is_valid_address, parsed_address, addr_error = validate_address(
+        address_street,
+        address_city,
+        address_state,
+        address_zip,
+    )
     if not is_valid_address:
         prefilled = {
             "service_type": service_type,
             "name": name,
             "email": email,
             "phone": phone,
-            "address": address,
+            "address_street": address_street,
+            "address_city": address_city,
+            "address_state": address_state,
+            "address_zip": address_zip,
         }
         errors = {"address": addr_error}
 
@@ -296,6 +268,9 @@ async def submit_booking(
             },
             status_code=400,
         )
+
+    # Build full address string for calendar + Zapier + confirmation page
+    full_address = f"{parsed_address['street']}, {parsed_address['city']}, {parsed_address['state']} {parsed_address['zip']}"
 
     # 1) Determine start datetime
     if time_slot:
@@ -366,7 +341,7 @@ async def submit_booking(
         f"Customer: {name}",
         f"Email: {email}",
         f"Phone: {phone}",
-        f"Address: {address}",
+        f"Address: {full_address}",
     ]
     if notes:
         description_lines.append(f"Notes: {notes}")
@@ -405,14 +380,13 @@ async def submit_booking(
         calendar_id=CALENDAR_ID,
     )
 
-    # 5) Trigger email confirmation via Zapier (non-blocking),
-    #    now with services + duration + count.
+    # 5) Trigger email confirmation via Zapier
     background_tasks.add_task(
         send_booking_to_zapier,
         name,
         email,
         phone,
-        address,
+        full_address,
         service_type,
         start_dt,
         end_dt,
@@ -423,7 +397,7 @@ async def submit_booking(
         num_services,
     )
 
-    # 6) Show confirmation page with services + duration
+    # 6) Show confirmation page
     return templates.TemplateResponse(
         "booking_confirm.html",
         {
@@ -432,7 +406,7 @@ async def submit_booking(
             "service_type": service_type,
             "start": start_dt,
             "end": end_dt,
-            "address": address,
+            "address": full_address,
             "services_this_visit": services_this_visit,
             "num_services": num_services,
             "duration_hours": duration_hours,
@@ -444,42 +418,33 @@ async def submit_booking(
 # Pydantic model for JSON quote requests
 # =====================================================
 class QuoteRequest(BaseModel):
-    # Contact info
     contact_name: Optional[str] = None
     contact_phone: Optional[str] = None
     contact_email: Optional[str] = None
 
-    # Primary service label
     service: str = "tv_mounting"
 
-    # TV Mounting
     tv_size: int = 0
     wall_type: str = "drywall"
     conceal_type: str = "none"
     soundbar: bool = False
     led: bool = False
 
-    # Floating Shelves
     shelves: bool = False
     shelves_count: int = 0
 
-    # Picture & Art Hanging
     picture_count: int = 0
 
-    # Closet Shelving
     closet_shelving: bool = False
     closet_needs_materials: bool = False
     closet_shelf_count: int = 0
     closet_shelf_not_sure: bool = False
 
-    # Decor / Art & Mirrors
     decor_count: int = 0
 
-    # Visit modifiers
     same_day: bool = False
     after_hours: bool = False
 
-    # Location
     zip_code: str = "20735"
 
 
@@ -501,11 +466,6 @@ def send_lead_to_zapier(
     booking_url: str,
     quote_result: dict,
 ) -> None:
-    """
-    Send lead + quote data to Zapier for logging in Google Sheets and triggering
-    email flows. Failures here should NEVER break the user experience.
-    """
-
     if not ZAPIER_WEBHOOK_URL:
         print("ZAPIER_WEBHOOK_URL is empty; skipping Zapier send")
         return
@@ -515,14 +475,10 @@ def send_lead_to_zapier(
 
         payload = {
             "timestamp": datetime.utcnow().isoformat(),
-
-            # Contact info
             "contact_name": contact_name or "",
             "contact_phone": contact_phone or "",
             "contact_email": contact_email or "",
             "zip_code": zip_code,
-
-            # Job details
             "service": service,
             "tv_size": tv_size,
             "wall_type": wall_type,
@@ -530,11 +486,7 @@ def send_lead_to_zapier(
             "items_count": picture_count,
             "same_day": same_day,
             "after_hours": after_hours,
-
-            # Booking
             "booking_url": booking_url,
-
-            # Quote breakdown (legacy fields kept for Zapier sheet)
             "base_mounting": line_items.get("base_mounting", 0),
             "wall_type_adjustment": line_items.get("wall_type_adjustment", 0),
             "wire_concealment": line_items.get("wire_concealment", 0),
@@ -557,7 +509,7 @@ def send_lead_to_zapier(
 
 
 # =====================================================
-# Zapier sending helper for BOOKINGS (email confirmation)
+# Zapier sending helper for BOOKINGS
 # =====================================================
 def send_booking_to_zapier(
     name: str,
@@ -573,13 +525,6 @@ def send_booking_to_zapier(
     duration_hours: float,
     num_services: int,
 ) -> None:
-    """
-    Send booking details to Zapier so it can send a confirmation email and log the booking.
-    Includes:
-      - which services are included
-      - how many services
-      - estimated duration
-    """
     if not BOOKING_WEBHOOK_URL:
         print("BOOKING_WEBHOOK_URL is empty; skipping booking Zapier send")
         return
@@ -601,42 +546,28 @@ def send_booking_to_zapier(
 
         payload = {
             "timestamp": datetime.utcnow().isoformat(),
-
-            # Customer info
             "name": name,
             "email": email,
             "phone": phone,
             "address": address,
-
-            # Parsed address components
             "address_street": parsed_address.get("street", ""),
             "address_city": parsed_address.get("city", ""),
             "address_state": parsed_address.get("state", ""),
             "address_zip": parsed_address.get("zip", ""),
-
-            # Booking details
             "service_type": service_type,
             "start_iso": start_local.isoformat(),
             "end_iso": end_local.isoformat(),
             "start_pretty_date": start_local.strftime("%A, %B %-d, %Y"),
             "start_pretty_time": start_local.strftime("%-I:%M %p"),
             "end_pretty_time": end_local.strftime("%-I:%M %p"),
-
-            # Same-day / after-hours flags
             "is_same_day": is_same_day,
             "is_after_hours": is_after_hours,
-
-            # Surcharge amounts
             "same_day_surcharge": same_day_surcharge,
             "after_hours_surcharge": after_hours_surcharge,
             "total_surcharge": total_surcharge,
-
-            # Multi-service details
             "services_this_visit": services_str,
             "num_services": num_services,
             "duration_hours": duration_hours,
-
-            # Extra notes
             "notes": notes or "",
         }
 
@@ -652,7 +583,7 @@ def send_booking_to_zapier(
 
 
 # =====================================================
-# Build booking URL helper – NOW POINTS TO /book
+# Booking URL helper (front-end link into /book)
 # =====================================================
 def build_booking_url(
     contact_name: str,
@@ -660,10 +591,6 @@ def build_booking_url(
     contact_phone: str,
     service: str,
 ) -> str:
-    """
-    Helper to create a link into your own /book route (same domain),
-    instead of Calendly.
-    """
     base_url = "/book"
 
     params = []
@@ -674,14 +601,12 @@ def build_booking_url(
     if contact_phone:
         params.append(f"phone={contact_phone}")
     if service:
-        # Map primary service into the booking service_type dropdown
-        # This expects values like "tv_mounting", "picture_hanging", etc.
         service_map = {
             "tv_mounting": "TV Mounting",
             "picture_hanging": "Picture & Art Hanging",
             "floating_shelves": "Floating Shelves",
             "closet_shelving": "Closet Shelving",
-            "decor": "Curtains & Blinds",  # you can tweak this mapping if needed
+            "decor": "Curtains & Blinds",
         }
         label = service_map.get(service, "TV Mounting")
         params.append(f"service_type={label}")
@@ -710,31 +635,19 @@ async def quote_html(
     contact_phone: str = Form(""),
     contact_email: str = Form(""),
     service: str = Form("tv_mounting"),
-
-    # TV mounting
     tv_size: int = Form(0),
     wall_type: str = Form("drywall"),
     conceal_type: str = Form("none"),
     soundbar: str = Form("false"),
     led: str = Form("false"),
-
-    # Floating shelves
     shelves: str = Form("false"),
     shelves_count: int = Form(0),
-
-    # Picture & art hanging
     picture_count: int = Form(0),
-
-    # Closet shelving
     closet_shelving: str = Form("false"),
     closet_needs_materials: str = Form("false"),
     closet_shelf_count: int = Form(0),
     closet_shelf_not_sure: str = Form("false"),
-
-    # Decor / art & mirror arrangement
     decor_count: int = Form(0),
-
-    # Visit modifiers
     same_day: str = Form("false"),
     after_hours: str = Form("false"),
     zip_code: str = Form("20735"),
@@ -742,7 +655,6 @@ async def quote_html(
     def to_bool(value: str) -> bool:
         return str(value).lower() == "true"
 
-    # 1) Calculate the quote (multi-service)
     result = calculate_quote(
         service=service,
         tv_size=tv_size,
@@ -763,7 +675,6 @@ async def quote_html(
         closet_shelf_not_sure=to_bool(closet_shelf_not_sure),
     )
 
-    # 2) Build booking URL for this quote (now /book)
     booking_url = build_booking_url(
         contact_name=contact_name,
         contact_email=contact_email,
@@ -771,7 +682,6 @@ async def quote_html(
         service=service,
     )
 
-    # 3) Schedule Zapier send in the background
     background_tasks.add_task(
         send_lead_to_zapier,
         contact_name,
@@ -789,7 +699,6 @@ async def quote_html(
         result,
     )
 
-    # 4) Render HTML result page
     return templates.TemplateResponse(
         "quote_result.html",
         {
@@ -808,9 +717,6 @@ async def quote_html(
 # =====================================================
 @app.post("/quote")
 def get_quote(request_data: QuoteRequest, background_tasks: BackgroundTasks):
-    """
-    JSON API version of the quote endpoint.
-    """
     result = calculate_quote(**request_data.dict())
 
     booking_url = build_booking_url(
