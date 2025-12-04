@@ -98,6 +98,10 @@
     button:hover {
       background: #1d4ed8;
     }
+    .hint {
+      font-size: 0.8rem;
+      color: #6b7280;
+    }
     @media (max-width: 640px) {
       .two-col {
         grid-template-columns: 1fr;
@@ -109,7 +113,7 @@
   <h1>Get a Fast Quote</h1>
   <p class="lead">
     Tell me what you need done. You can mix and match multiple services in one visit
-    (TV mounting, picture hanging, shelves, closet shelving, and decor).
+    (TV mounting, picture hanging, shelves, closet shelving, and curtains / blinds / decor).
   </p>
 
   <form method="post" action="/quote-html">
@@ -139,8 +143,9 @@
     <!-- Primary Service Label -->
     <section>
       <h2 class="section-title">Main Service for This Visit</h2>
-      <p style="font-size:0.9rem; color:#666; margin-bottom:0.5rem;">
-        This just helps me label the job. You can still add any other services below.
+      <p class="hint" style="margin-bottom:0.5rem;">
+        This just helps label the job. You can still add other services below —
+        pricing will include everything you select.
       </p>
       <div class="field-group">
         <label for="service">Primary service</label>
@@ -149,8 +154,7 @@
           <option value="picture_hanging">Picture &amp; Art Hanging</option>
           <option value="floating_shelves">Floating Shelves</option>
           <option value="closet_shelving">Closet Shelving / Organizers</option>
-          <option value="decor">Decor / Art &amp; Mirror Arrangement</option>
-          <option value="curtains_blinds">Curtains &amp; Blinds</option>
+          <option value="decor">Curtains / Blinds / Decor</option>
         </select>
       </div>
     </section>
@@ -159,7 +163,8 @@
     <section>
       <h2 class="section-title">TV Mounting (optional)</h2>
       <h3 class="section-subtitle">
-        A basic TV mounting under 60" is about $60; 60" or larger is about $70 before add-ons.
+        Basic TV mounting under 60" is about $60; 60" or larger is about $70 before wall type
+        and cable-hiding options.
       </h3>
       <div class="card">
         <div class="two-col">
@@ -201,6 +206,11 @@
             </label>
           </div>
         </div>
+
+        <p class="hint" style="margin-top:0.4rem;">
+          If you only need TV removal or shelf removal, mention that in the notes and
+          we’ll adjust on the final quote.
+        </p>
       </div>
     </section>
 
@@ -208,19 +218,52 @@
     <section>
       <h2 class="section-title">Picture &amp; Art Hanging (optional)</h2>
       <h3 class="section-subtitle">
-        1–3 pictures ≈ $40, 4–5 ≈ $60, and each additional piece adds a bit more.
+        1–2 items ≈ $30, 3–5 ≈ $60, 6–8 ≈ $90, with a bit more for larger sets.
+        Oversized pieces (over 5 ft wide) add a small surcharge.
       </h3>
       <div class="card">
         <div class="field-group">
-          <label for="picture_count">How many pictures/art pieces?</label>
+          <label for="picture_count">Total number of pictures / art pieces</label>
           <input id="picture_count" name="picture_count" type="number" min="0" value="0" />
         </div>
+
+        <div class="checkbox-row" style="margin-top:0.3rem;">
+          <input id="picture_has_large" name="picture_has_large" type="checkbox" value="true" />
+          <label for="picture_has_large">Any items larger than 5 ft wide?</label>
+        </div>
+
+        <div class="field-group" id="picture_large_section" style="display:none; margin-top:0.3rem;">
+          <label for="picture_large_count">
+            Number of pieces larger than 5 ft wide
+          </label>
+          <input
+            id="picture_large_count"
+            name="picture_large_count"
+            type="number"
+            min="0"
+            value="0"
+          />
+        </div>
+
+        <div class="checkbox-row" style="margin-top:0.3rem;">
+          <input id="gallery_wall" name="gallery_wall" type="checkbox" value="true" />
+          <label for="gallery_wall">Gallery wall?</label>
+        </div>
+
+        <p class="hint" style="margin-top:0.3rem;">
+          Checking “Gallery wall” just helps with planning; there’s no separate charge
+          just for that label.
+        </p>
       </div>
     </section>
 
     <!-- Floating Shelves -->
     <section>
       <h2 class="section-title">Floating Shelves (optional)</h2>
+      <h3 class="section-subtitle">
+        Every 2 shelves is about $60 (1–2 = 60, 3–4 = 120, 5–6 = 180, etc.), with a small
+        fee for removals.
+      </h3>
       <div class="card">
         <div class="checkbox-row">
           <input id="shelves" name="shelves" type="checkbox" value="true" />
@@ -228,12 +271,37 @@
             Include floating shelves in this visit
           </label>
         </div>
-        <div class="field-group" style="margin-top:0.5rem;">
-          <label for="shelves_count">Approximate number of floating shelves</label>
-          <input id="shelves_count" name="shelves_count" type="number" min="0" value="0" />
+
+        <div class="two-col" style="margin-top:0.5rem;">
+          <div class="field-group">
+            <label for="shelves_install_count">
+              Number of floating shelves to install
+            </label>
+            <input
+              id="shelves_install_count"
+              name="shelves_install_count"
+              type="number"
+              min="0"
+              value="0"
+            />
+          </div>
+          <div class="field-group">
+            <label for="shelves_remove_count">
+              Number of floating shelves to remove
+            </label>
+            <input
+              id="shelves_remove_count"
+              name="shelves_remove_count"
+              type="number"
+              min="0"
+              value="0"
+            />
+          </div>
         </div>
-        <p style="font-size:0.85rem; color:#666; margin:0.25rem 0 0;">
-          This helps estimate time on-site. Pricing can be adjusted after we confirm details.
+
+        <p class="hint" style="margin-top:0.3rem;">
+          Removal-only jobs are okay. Floating shelf removal is typically a smaller
+          charge per shelf.
         </p>
       </div>
     </section>
@@ -242,7 +310,8 @@
     <section>
       <h2 class="section-title">Closet Shelving / Organizers (optional)</h2>
       <h3 class="section-subtitle">
-        I can install closet shelving you already have, or purchase it for you and install.
+        1 shelf ≈ $60, 2 ≈ $90, 3 ≈ $120, then about $30 for each additional shelf,
+        plus a small fee for removals.
       </h3>
       <div class="card">
         <div class="checkbox-row">
@@ -252,41 +321,86 @@
           </label>
         </div>
 
-        <div class="checkbox-row" style="margin-top:0.5rem;">
-          <input id="closet_needs_materials" name="closet_needs_materials" type="checkbox" value="true" />
+        <div class="two-col" style="margin-top:0.5rem;">
+          <div class="field-group">
+            <label for="closet_install_count">
+              Number of closet shelves to install
+            </label>
+            <input
+              id="closet_install_count"
+              name="closet_install_count"
+              type="number"
+              min="0"
+              value="0"
+            />
+          </div>
+          <div class="field-group">
+            <label for="closet_remove_count">
+              Number of closet shelves to remove
+            </label>
+            <input
+              id="closet_remove_count"
+              name="closet_remove_count"
+              type="number"
+              min="0"
+              value="0"
+            />
+          </div>
+        </div>
+
+        <div class="checkbox-row" style="margin-top:0.3rem;">
+          <input
+            id="closet_needs_materials"
+            name="closet_needs_materials"
+            type="checkbox"
+            value="true"
+          />
           <label for="closet_needs_materials">
             I need you to purchase the closet shelves for me
           </label>
         </div>
 
-        <div class="field-group" style="margin-top:0.5rem;">
-          <label for="closet_shelf_count">Approximate number of closet shelves</label>
-          <input id="closet_shelf_count" name="closet_shelf_count" type="number" min="0" value="0" />
-        </div>
-
         <div class="checkbox-row" style="margin-top:0.25rem;">
-          <input id="closet_shelf_not_sure" name="closet_shelf_not_sure" type="checkbox" value="true" />
+          <input
+            id="closet_shelf_not_sure"
+            name="closet_shelf_not_sure"
+            type="checkbox"
+            value="true"
+          />
           <label for="closet_shelf_not_sure">
             I’m not sure yet on the exact number of shelves
           </label>
         </div>
 
-        <p style="font-size:0.85rem; color:#666; margin:0.25rem 0 0;">
-          Shelf count helps with planning, but we’ll confirm details and materials budget before purchasing anything.
+        <p class="hint" style="margin-top:0.3rem;">
+          Shelf counts help with the estimate and scheduling; we’ll confirm details
+          before buying any materials.
         </p>
       </div>
     </section>
 
-    <!-- Decor / Art & Mirror Arrangement -->
+    <!-- Curtains / Blinds / Decor -->
     <section>
-      <h2 class="section-title">Decor / Art &amp; Mirror Arrangement (optional)</h2>
+      <h2 class="section-title">Curtains / Blinds / Decor (optional)</h2>
+      <h3 class="section-subtitle">
+        Starts at about $60 total, with pricing based on the number of windows or
+        decor pieces.
+      </h3>
       <div class="card">
         <div class="field-group">
-          <label for="decor_count">How many decor pieces or mirrors?</label>
-          <input id="decor_count" name="decor_count" type="number" min="0" value="0" />
+          <label for="decor_count">
+            Number of curtain panels / blinds / decor items
+          </label>
+          <input
+            id="decor_count"
+            name="decor_count"
+            type="number"
+            min="0"
+            value="0"
+          />
         </div>
-        <p style="font-size:0.85rem; color:#666; margin:0.25rem 0 0;">
-          This covers arranging & hanging decor or mirrors to complete the space.
+        <p class="hint" style="margin-top:0.3rem;">
+          This helps plan time for measuring, drilling, leveling, and cleanup.
         </p>
       </div>
     </section>
@@ -309,10 +423,34 @@
             </label>
           </div>
         </div>
+        <p class="hint" style="margin-top:0.3rem;">
+          After-hours pricing is applied on the booking side only, so this estimate
+          focuses on the work itself.
+        </p>
       </div>
     </section>
 
     <button type="submit">Get My Estimate</button>
   </form>
+
+  <script>
+    // Show/hide large-art count
+    const pictureHasLarge = document.getElementById("picture_has_large");
+    const pictureLargeSection = document.getElementById("picture_large_section");
+
+    function syncLargeArt() {
+      if (!pictureLargeSection) return;
+      if (pictureHasLarge && pictureHasLarge.checked) {
+        pictureLargeSection.style.display = "grid";
+      } else {
+        pictureLargeSection.style.display = "none";
+      }
+    }
+
+    if (pictureHasLarge) {
+      pictureHasLarge.addEventListener("change", syncLargeArt);
+      syncLargeArt();
+    }
+  </script>
 </body>
 </html>

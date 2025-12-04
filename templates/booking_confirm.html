@@ -18,6 +18,7 @@
       border-radius: 0.75rem;
       padding: 1.5rem;
       box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+      margin-bottom: 1rem;
     }
     h1 {
       font-size: 1.6rem;
@@ -52,6 +53,30 @@
       margin-top: 0.75rem;
       font-size: 0.9rem;
       color: #1f2933;
+    }
+    .subcard-title {
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      color: #111827;
+    }
+    .subtle {
+      font-size: 0.85rem;
+      color: #6b7280;
+      margin-top: 0.4rem;
+    }
+    .job-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.45rem 1.25rem;
+      font-size: 0.9rem;
+    }
+    .job-item-label {
+      font-weight: 500;
+      color: #374151;
+    }
+    .job-item-value {
+      color: #111827;
     }
     .cta-row {
       display: flex;
@@ -94,10 +119,14 @@
         width: 100%;
         justify-content: center;
       }
+      .job-grid {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
 <body>
+  <!-- Core confirmation -->
   <div class="card">
     <h1>You're booked, {{ name }} ✅</h1>
     <p class="lead">
@@ -144,10 +173,102 @@
       window. If we finish early, you’re not charged extra time — this is just to
       make sure there’s enough time blocked off for your project.
     </div>
+  </div>
 
+  <!-- New: job details -->
+  <div class="card">
+    <div class="subcard-title">Job details for planning</div>
+
+    <div class="job-grid">
+      {% if picture_total_count and picture_total_count > 0 %}
+        <div>
+          <div class="job-item-label">Pictures / art pieces</div>
+          <div class="job-item-value">
+            {{ picture_total_count }}
+            {% if picture_large_count and picture_large_count > 0 %}
+              ({{ picture_large_count }} larger than 5 ft)
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
+
+      {% if gallery_wall %}
+        <div>
+          <div class="job-item-label">Gallery wall</div>
+          <div class="job-item-value">Yes</div>
+        </div>
+      {% endif %}
+
+      {% if shelves_install_count and shelves_install_count > 0 %}
+        <div>
+          <div class="job-item-label">Floating shelves – install</div>
+          <div class="job-item-value">{{ shelves_install_count }}</div>
+        </div>
+      {% endif %}
+
+      {% if shelves_remove_count and shelves_remove_count > 0 %}
+        <div>
+          <div class="job-item-label">Floating shelves – remove</div>
+          <div class="job-item-value">{{ shelves_remove_count }}</div>
+        </div>
+      {% endif %}
+
+      {% if closet_install_count and closet_install_count > 0 %}
+        <div>
+          <div class="job-item-label">Closet shelves – install</div>
+          <div class="job-item-value">{{ closet_install_count }}</div>
+        </div>
+      {% endif %}
+
+      {% if closet_remove_count and closet_remove_count > 0 %}
+        <div>
+          <div class="job-item-label">Closet shelves – remove</div>
+          <div class="job-item-value">{{ closet_remove_count }}</div>
+        </div>
+      {% endif %}
+
+      {% if decor_item_count and decor_item_count > 0 %}
+        <div>
+          <div class="job-item-label">Curtains / blinds / decor items</div>
+          <div class="job-item-value">{{ decor_item_count }}</div>
+        </div>
+      {% endif %}
+
+      {% if ladder_required %}
+        <div>
+          <div class="job-item-label">Ladder required?</div>
+          <div class="job-item-value">Yes</div>
+        </div>
+      {% endif %}
+
+      {% if contact_method %}
+        <div>
+          <div class="job-item-label">Preferred contact</div>
+          <div class="job-item-value">
+            {{ contact_method|capitalize }}
+          </div>
+        </div>
+      {% endif %}
+    </div>
+
+    {% if building_notes %}
+      <div class="detail-row" style="margin-top:0.6rem;">
+        <span class="label">Parking / building notes:</span>
+        <span class="value">{{ building_notes }}</span>
+      </div>
+    {% endif %}
+
+    <p class="subtle">
+      If any of these details need to be updated, just reply to your confirmation email
+      or use the button below to email an update.
+    </p>
+  </div>
+
+  <!-- CTAs -->
+  <div class="card">
     <div class="cta-row">
       <a href="/" class="btn btn-primary">Back to Quote Tool</a>
-      <a href="mailto:{{ address|e }}?subject=Hawkins%20Pro%20Mounting%20Booking"
+      <a href="mailto:hawkinspromounting@gmail.com?subject=Update%20to%20my%20HPM%20booking"
          class="btn btn-ghost">
         Update or ask a question
       </a>
