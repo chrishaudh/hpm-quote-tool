@@ -2,25 +2,33 @@ from typing import Optional
 from datetime import datetime, date, timedelta
 import re
 
-import requests  # make sure this is in requirements.txt
+import requests
 import pytz
 
 from fastapi import FastAPI, Request, Form, BackgroundTasks, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from google_calendar import create_booking_event, get_available_slots_for_date
 from quote_logic import calculate_quote
 from config import TIMEZONE
 
+# =====================================================
+# FastAPI app & templates
+# =====================================================
+
 app = FastAPI(title="Hawkins Pro Mounting Quote API")
+
+# Serve static files (for logo, etc.)
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 templates = Jinja2Templates(directory="templates")
 
-# ---------------------------------
+# =====================================================
 # Service + Zapier configuration
-# ---------------------------------
+# =====================================================
 
 SERVICE_TYPES = [
     "TV Mounting",
@@ -35,8 +43,8 @@ SERVICE_AREA_STATES = {"DC", "MD", "VA"}
 ZIP_RE = re.compile(r"^\d{5}(?:-\d{4})?$")
 
 SAME_DAY_SURCHARGE = 25.0
-AFTER_HOURS_SURCHARGE = 20.0  # $20 flat after-hours
-AFTER_HOURS_START_HOUR = 17   # 5 PM
+AFTER_HOURS_SURCHARGE = 25.0
+AFTER_HOURS_START_HOUR = 18
 
 ZAPIER_WEBHOOK_URL = "https://hooks.zapier.com/hooks/catch/25408903/uz2ihgh/"
 BOOKING_WEBHOOK_URL = "https://hooks.zapier.com/hooks/catch/25408903/ukipdo4/"
@@ -45,8 +53,7 @@ CALENDAR_ID = "primary"
 
 
 # =====================================================
-# Helper: compute booking duration based on services
-#            + detailed counts
+# Helper: compute booking duration (fallback)
 # =====================================================
 def compute_booking_duration_hours(
     include_tv: bool,
@@ -54,98 +61,24 @@ def compute_booking_duration_hours(
     include_shelves: bool,
     include_closet: bool,
     include_decor: bool,
-    picture_total_count: int,
-    picture_large_count: int,
-    shelves_install_count: int,
-    shelves_remove_count: int,
-    closet_install_count: int,
-    closet_remove_count: int,
-    decor_item_count: int,
 ) -> float:
     """
-    Estimate a time window using the selected services and counts.
-
-    This is intentionally conservative so you have enough time on-site.
+    Fallback if we *don't* get estimated_hours from the quote.
+    Very rough: 2–4 hours based on how many service buckets are selected.
     """
+    flags = [include_tv, include_pictures, include_shelves, include_closet, include_decor]
+    count = sum(1 for f in flags if f)
 
-    duration = 0.0
-
-    # TV mounting – assume 1 main TV in most jobs.
-    if include_tv:
-        duration += 1.5  # baseline for one TV, wall type, and possible wire work
-
-    # Picture & Art Hanging
-    if include_pictures:
-        total = max(0, int(picture_total_count))
-        large = max(0, int(picture_large_count))
-
-        if total > 0:
-            if total <= 2:
-                duration += 1.0
-            elif total <= 5:
-                duration += 1.5
-            elif total <= 8:
-                duration += 2.0
-            else:
-                # every additional 3 pieces beyond 8 ≈ +0.5 hr
-                extra_sets = (total - 8 + 2) // 3
-                duration += 2.0 + 0.5 * extra_sets
-
-        # Larger than 5 ft wide – adds some handling / measuring time
-        if large > 0:
-            # Roughly +0.25 hr per 2 large pieces
-            large_sets = (large + 1) // 2
-            duration += 0.25 * large_sets
-
-    # Floating shelves
-    if include_shelves:
-        install = max(0, int(shelves_install_count))
-        remove = max(0, int(shelves_remove_count))
-
-        if install > 0:
-            # ~0.6 hr per shelf, based on 3 shelves ≈ 2 hours
-            duration += 0.6 * install
-
-        if remove > 0:
-            # Removal is quicker than install but still some patching/cleanup
-            duration += 0.2 * remove
-
-    # Closet shelving / organizers
-    if include_closet:
-        install_c = max(0, int(closet_install_count))
-        remove_c = max(0, int(closet_remove_count))
-
-        if install_c > 0:
-            # ~0.5 hr per closet shelf (planning, leveling, hardware)
-            duration += 0.5 * install_c
-        if remove_c > 0:
-            # 15 minutes per shelf removal
-            duration += 0.25 * remove_c
-
-    # Curtains / Blinds / Decor
-    if include_decor:
-        decor = max(0, int(decor_item_count))
-        if decor > 0:
-            # ~0.4 hr per item for measuring, drilling, leveling
-            duration += 0.4 * decor
-
-    # Fallback: if somehow nothing added, assume a 2-hour minimum window
-    if duration <= 0.0:
-        duration = 2.0
-
-    # Clamp window between 2 and 6 hours for sanity
-    if duration < 2.0:
-        duration = 2.0
-    if duration > 6.0:
-        duration = 6.0
-
-    # Round to nearest half-hour
-    duration = round(duration * 2) / 2.0
-    return duration
+    if count <= 1:
+        return 2.0
+    elif count == 2:
+        return 3.0
+    else:
+        return 4.0
 
 
 # =====================================================
-# Address validation helper (separate fields)
+# Address validation helper
 # =====================================================
 def validate_address(
     street: str,
@@ -253,7 +186,17 @@ async def show_booking_form(
     name: Optional[str] = Query(None),
     email: Optional[str] = Query(None),
     phone: Optional[str] = Query(None),
+    hours: Optional[float] = Query(None),
 ):
+    """
+    Render the booking form.
+
+    - service_type, name, email, phone, hours are normally passed from the quote's
+      "Book This Install" button as query params.
+    - booking is a simple dict so booking_form.html can safely do things like
+      {% if booking.has_tv %} without blowing up on first load.
+    """
+
     prefilled = {
         "service_type": service_type,
         "name": name,
@@ -263,6 +206,28 @@ async def show_booking_form(
         "address_city": "",
         "address_state": "",
         "address_zip": "",
+        "estimated_hours": hours,
+    }
+
+    # Default booking context – safe for template to read
+    booking = {
+        "has_tv": False,
+        "tv_count": 0,
+        "tv_remove_count": 0,
+        "picture_count": 0,
+        "picture_large_flag": False,
+        "picture_large_count": 0,
+        "gallery_wall": False,
+        "has_shelves": False,
+        "shelves_count": 0,
+        "shelves_remove_count": 0,
+        "closet_shelving": False,
+        "closet_shelf_count": 0,
+        "closet_remove_count": 0,
+        "curtains_count": 0,
+        "curtains_remove_count": 0,
+        "ladder_required": False,
+        "estimated_hours": hours,
     }
 
     return templates.TemplateResponse(
@@ -272,6 +237,7 @@ async def show_booking_form(
             "service_types": SERVICE_TYPES,
             "prefilled": prefilled,
             "errors": {},
+            "booking": booking,
         },
     )
 
@@ -292,42 +258,26 @@ async def submit_booking(
     appointment_date: Optional[str] = Form(None),
     appointment_time: Optional[str] = Form(None),
 
-    # Multi-service selections for this visit
+    # Multi-service selections for this visit (may or may not be present in form)
     include_tv: str = Form("false"),
     include_pictures: str = Form("false"),
     include_shelves: str = Form("false"),
     include_closet: str = Form("false"),
     include_decor: str = Form("false"),
 
-    # Detailed counts / flags from booking_form.html
-    picture_total_count: int = Form(0),
-    picture_has_large: str = Form("false"),
-    picture_large_count: int = Form(0),
-    gallery_wall: str = Form("false"),
-
-    shelves_install_count: int = Form(0),
-    shelves_remove_count: int = Form(0),
-
-    closet_install_count: int = Form(0),
-    closet_remove_count: int = Form(0),
-
-    decor_item_count: int = Form(0),
-
     # Customer info
     name: str = Form(...),
     email: str = Form(...),
     phone: str = Form(...),
 
-    # NEW: Separate address fields
+    # Separate address fields
     address_street: str = Form(...),
     address_city: str = Form(...),
     address_state: str = Form(...),
     address_zip: str = Form(...),
 
-    # Extra preferences
-    contact_method: str = Form(""),
-    ladder_required: str = Form("false"),
-    building_notes: str = Form(""),
+    # Estimated hours from the quote (hidden input)
+    estimated_hours: Optional[float] = Form(None),
 
     notes: str = Form(""),
 ):
@@ -336,7 +286,7 @@ async def submit_booking(
     def to_bool(value: str) -> bool:
         return str(value).lower() == "true"
 
-    # 0) Validate address using separate fields
+    # 0) Validate address
     is_valid_address, parsed_address, addr_error = validate_address(
         address_street,
         address_city,
@@ -353,6 +303,7 @@ async def submit_booking(
             "address_city": address_city,
             "address_state": address_state,
             "address_zip": address_zip,
+            "estimated_hours": estimated_hours,
         }
         errors = {"address": addr_error}
 
@@ -367,12 +318,8 @@ async def submit_booking(
             status_code=400,
         )
 
-    # Build full address string for calendar + Zapier + confirmation page
-    full_address = (
-        f"{parsed_address['street']}, "
-        f"{parsed_address['city']}, "
-        f"{parsed_address['state']} {parsed_address['zip']}"
-    )
+    # Build full address string
+    full_address = f"{parsed_address['street']}, {parsed_address['city']}, {parsed_address['state']} {parsed_address['zip']}"
 
     # 1) Determine start datetime
     if time_slot:
@@ -414,33 +361,25 @@ async def submit_booking(
     else:
         start_dt = start_dt.astimezone(tz)
 
-    # 1b) Interpret multi-service checkboxes
+    # 1b) Multi-service flags (fallback if we ever need them)
     include_tv_bool = to_bool(include_tv)
     include_pictures_bool = to_bool(include_pictures)
     include_shelves_bool = to_bool(include_shelves)
     include_closet_bool = to_bool(include_closet)
     include_decor_bool = to_bool(include_decor)
 
-    # 1c) Interpret flags
-    picture_has_large_bool = to_bool(picture_has_large)
-    gallery_wall_bool = to_bool(gallery_wall)
-    ladder_required_bool = to_bool(ladder_required)
+    # 2) Duration: prefer estimated_hours from quote, fall back to rough logic
+    if estimated_hours is not None and estimated_hours > 0:
+        duration_hours = float(estimated_hours)
+    else:
+        duration_hours = compute_booking_duration_hours(
+            include_tv_bool,
+            include_pictures_bool,
+            include_shelves_bool,
+            include_closet_bool,
+            include_decor_bool,
+        )
 
-    # 2) Determine end datetime (dynamic with counts)
-    duration_hours = compute_booking_duration_hours(
-        include_tv_bool,
-        include_pictures_bool,
-        include_shelves_bool,
-        include_closet_bool,
-        include_decor_bool,
-        picture_total_count,
-        picture_large_count,
-        shelves_install_count,
-        shelves_remove_count,
-        closet_install_count,
-        closet_remove_count,
-        decor_item_count,
-    )
     end_dt = start_dt + timedelta(hours=duration_hours)
 
     # 2b) Same-day / after-hours flags
@@ -457,8 +396,9 @@ async def submit_booking(
         f"Phone: {phone}",
         f"Address: {full_address}",
     ]
+    if notes:
+        description_lines.append(f"Notes: {notes}")
 
-    # Detailed service breakdown
     services_this_visit = []
     if include_tv_bool:
         services_this_visit.append("TV Mounting")
@@ -469,57 +409,17 @@ async def submit_booking(
     if include_closet_bool:
         services_this_visit.append("Closet Shelving / Organizers")
     if include_decor_bool:
-        services_this_visit.append("Curtains / Blinds / Decor")
+        services_this_visit.append("Curtains & Blinds / Decor")
 
-    num_services = len(services_this_visit)
+    num_services = len(services_this_visit) if services_this_visit else 1
 
     if services_this_visit:
         description_lines.append("Services this visit: " + ", ".join(services_this_visit))
-        description_lines.append(f"Number of services: {num_services}")
 
-    # Counts + flags for planning
-    if include_pictures_bool:
-        description_lines.append(
-            f"Picture/Art: total={picture_total_count}, "
-            f"larger_than_5ft={picture_large_count}, "
-            f"gallery_wall={'YES' if gallery_wall_bool else 'NO'}"
-        )
-
-    if include_shelves_bool:
-        description_lines.append(
-            f"Floating shelves: install={shelves_install_count}, "
-            f"remove={shelves_remove_count}"
-        )
-
-    if include_closet_bool:
-        description_lines.append(
-            f"Closet shelving: install={closet_install_count}, "
-            f"remove={closet_remove_count}"
-        )
-
-    if include_decor_bool:
-        description_lines.append(f"Curtains/Blinds/Decor items: {decor_item_count}")
-
-    # Preferences
-    if contact_method:
-        description_lines.append(f"Preferred contact: {contact_method}")
-    description_lines.append(
-        f"Ladder required: {'YES' if ladder_required_bool else 'NO'}"
-    )
-    if building_notes:
-        description_lines.append(f"Parking / building notes: {building_notes}")
-
-    if notes:
-        description_lines.append(f"Project notes: {notes}")
-
+    description_lines.append(f"Number of services: {num_services}")
     description_lines.append(f"Expected duration: {duration_hours:.1f} hours")
-    description_lines.append(
-        f"Same-day booking: {'YES' if is_same_day_booking else 'NO'}"
-    )
-    description_lines.append(
-        f"After-hours booking (start >= {AFTER_HOURS_START_HOUR}:00): "
-        f"{'YES' if is_after_hours_booking else 'NO'}"
-    )
+    description_lines.append(f"Same-day booking: {'YES' if is_same_day_booking else 'NO'}")
+    description_lines.append(f"After-hours booking: {'YES' if is_after_hours_booking else 'NO'}")
 
     description = "\n".join(description_lines)
 
@@ -533,7 +433,7 @@ async def submit_booking(
         calendar_id=CALENDAR_ID,
     )
 
-    # 5) Trigger email confirmation via Zapier
+    # 5) Trigger email confirmation via Zapier (booking Zap)
     background_tasks.add_task(
         send_booking_to_zapier,
         name,
@@ -548,21 +448,9 @@ async def submit_booking(
         services_this_visit,
         duration_hours,
         num_services,
-        picture_total_count,
-        picture_large_count,
-        picture_has_large_bool,
-        gallery_wall_bool,
-        shelves_install_count,
-        shelves_remove_count,
-        closet_install_count,
-        closet_remove_count,
-        decor_item_count,
-        contact_method,
-        ladder_required_bool,
-        building_notes,
     )
 
-        # 6) Show confirmation page
+    # 6) Show confirmation page
     return templates.TemplateResponse(
         "booking_confirm.html",
         {
@@ -575,18 +463,6 @@ async def submit_booking(
             "services_this_visit": services_this_visit,
             "num_services": num_services,
             "duration_hours": duration_hours,
-            # New context for the confirmation template
-            "picture_total_count": picture_total_count,
-            "picture_large_count": picture_large_count if picture_has_large_bool else 0,
-            "gallery_wall": gallery_wall_bool,
-            "shelves_install_count": shelves_install_count,
-            "shelves_remove_count": shelves_remove_count,
-            "closet_install_count": closet_install_count,
-            "closet_remove_count": closet_remove_count,
-            "decor_item_count": decor_item_count,
-            "ladder_required": ladder_required_bool,
-            "contact_method": contact_method,
-            "building_notes": building_notes,
         },
     )
 
@@ -602,33 +478,35 @@ class QuoteRequest(BaseModel):
     service: str = "tv_mounting"
 
     tv_size: int = 0
+    tv_count: int = 0
     wall_type: str = "drywall"
     conceal_type: str = "none"
     soundbar: bool = False
     led: bool = False
 
-    # Floating shelves
     shelves: bool = False
-    shelves_install_count: int = 0
+    shelves_count: int = 0
     shelves_remove_count: int = 0
 
-    # Picture & art
     picture_count: int = 0
     picture_large_count: int = 0
-    gallery_wall: bool = False
 
-    # Closet shelving
     closet_shelving: bool = False
     closet_needs_materials: bool = False
-    closet_install_count: int = 0
-    closet_remove_count: int = 0
+    closet_shelf_count: int = 0
     closet_shelf_not_sure: bool = False
+    closet_remove_count: int = 0
 
-    # Curtains / blinds / decor
     decor_count: int = 0
+    decor_remove_count: int = 0
 
     same_day: bool = False
     after_hours: bool = False
+
+    ladder_required: bool = False
+    parking_notes: str = ""
+    preferred_contact: str = ""
+    gallery_wall: bool = False
 
     zip_code: str = "20735"
 
@@ -672,16 +550,12 @@ def send_lead_to_zapier(
             "same_day": same_day,
             "after_hours": after_hours,
             "booking_url": booking_url,
-            "base_mounting": line_items.get("base_mounting", 0),
-            "wall_type_adjustment": line_items.get("wall_type_adjustment", 0),
-            "wire_concealment": line_items.get("wire_concealment", 0),
-            "addons": line_items.get("addons", 0),
+            "base_mounting": line_items.get("tv_total", 0),
+            "addons": 0,
             "multi_service_discount": line_items.get("multi_service_discount", 0),
             "tax_rate": quote_result.get("tax_rate", 0),
             "subtotal_before_tax": quote_result.get("subtotal_before_tax", 0),
-            "estimated_total_with_tax": quote_result.get(
-                "estimated_total_with_tax", 0
-            ),
+            "estimated_total_with_tax": quote_result.get("estimated_total_with_tax", 0),
         }
 
         print("📤 Payload sending to Zapier (quote):")
@@ -711,18 +585,6 @@ def send_booking_to_zapier(
     services_this_visit: list,
     duration_hours: float,
     num_services: int,
-    picture_total_count: int,
-    picture_large_count: int,
-    picture_has_large: bool,
-    gallery_wall: bool,
-    shelves_install_count: int,
-    shelves_remove_count: int,
-    closet_install_count: int,
-    closet_remove_count: int,
-    decor_item_count: int,
-    contact_method: str,
-    ladder_required: bool,
-    building_notes: str,
 ) -> None:
     if not BOOKING_WEBHOOK_URL:
         print("BOOKING_WEBHOOK_URL is empty; skipping booking Zapier send")
@@ -768,19 +630,6 @@ def send_booking_to_zapier(
             "num_services": num_services,
             "duration_hours": duration_hours,
             "notes": notes or "",
-            # New detailed fields
-            "picture_total_count": picture_total_count,
-            "picture_large_count": picture_large_count,
-            "picture_has_large": picture_has_large,
-            "gallery_wall": gallery_wall,
-            "shelves_install_count": shelves_install_count,
-            "shelves_remove_count": shelves_remove_count,
-            "closet_install_count": closet_install_count,
-            "closet_remove_count": closet_remove_count,
-            "decor_item_count": decor_item_count,
-            "contact_method": contact_method,
-            "ladder_required": ladder_required,
-            "building_notes": building_notes,
         }
 
         print("📤 Payload sending to Zapier (booking):")
@@ -802,6 +651,7 @@ def build_booking_url(
     contact_email: str,
     contact_phone: str,
     service: str,
+    estimated_hours: Optional[float] = None,
 ) -> str:
     base_url = "/book"
 
@@ -819,10 +669,13 @@ def build_booking_url(
             "floating_shelves": "Floating Shelves",
             "closet_shelving": "Closet Shelving",
             "decor": "Curtains & Blinds",
+            "curtains_blinds": "Curtains & Blinds",
         }
-            # If user enters something unexpected, default to TV Mounting
         label = service_map.get(service, "TV Mounting")
         params.append(f"service_type={label}")
+
+    if estimated_hours is not None and estimated_hours > 0:
+        params.append(f"hours={estimated_hours:.2f}")
 
     if params:
         return f"{base_url}?{'&'.join(params)}"
@@ -850,30 +703,38 @@ async def quote_html(
     service: str = Form("tv_mounting"),
 
     tv_size: int = Form(0),
+    tv_count: int = Form(0),
+    tv_remove_count: int = Form(0),
+
     wall_type: str = Form("drywall"),
     conceal_type: str = Form("none"),
     soundbar: str = Form("false"),
     led: str = Form("false"),
 
     shelves: str = Form("false"),
-    shelves_install_count: int = Form(0),
+    shelves_count: int = Form(0),
     shelves_remove_count: int = Form(0),
 
     picture_count: int = Form(0),
     picture_large_count: int = Form(0),
-    picture_has_large: str = Form("false"),
-    gallery_wall: str = Form("false"),
 
     closet_shelving: str = Form("false"),
     closet_needs_materials: str = Form("false"),
-    closet_install_count: int = Form(0),
-    closet_remove_count: int = Form(0),
+    closet_shelf_count: int = Form(0),
     closet_shelf_not_sure: str = Form("false"),
+    closet_remove_count: int = Form(0),
 
     decor_count: int = Form(0),
+    decor_remove_count: int = Form(0),
 
     same_day: str = Form("false"),
     after_hours: str = Form("false"),
+
+    ladder_required: str = Form("false"),
+    parking_notes: str = Form(""),
+    preferred_contact: str = Form(""),
+    gallery_wall: str = Form("false"),
+
     zip_code: str = Form("20735"),
 ):
     def to_bool(value: str) -> bool:
@@ -882,13 +743,12 @@ async def quote_html(
     result = calculate_quote(
         service=service,
         tv_size=tv_size,
+        tv_count=tv_count,
         wall_type=wall_type,
         conceal_type=conceal_type,
         soundbar=to_bool(soundbar),
         shelves=to_bool(shelves),
         picture_count=picture_count,
-        picture_large_count=picture_large_count if to_bool(picture_has_large) else 0,
-        gallery_wall=to_bool(gallery_wall),
         led=to_bool(led),
         same_day=to_bool(same_day),
         after_hours=to_bool(after_hours),
@@ -896,11 +756,18 @@ async def quote_html(
         closet_shelving=to_bool(closet_shelving),
         closet_needs_materials=to_bool(closet_needs_materials),
         decor_count=decor_count,
-        shelves_install_count=shelves_install_count,
-        shelves_remove_count=shelves_remove_count,
-        closet_install_count=closet_install_count,
-        closet_remove_count=closet_remove_count,
+        shelves_count=shelves_count,
+        closet_shelf_count=closet_shelf_count,
         closet_shelf_not_sure=to_bool(closet_shelf_not_sure),
+        tv_remove_count=tv_remove_count,
+        shelves_remove_count=shelves_remove_count,
+        closet_remove_count=closet_remove_count,
+        decor_remove_count=decor_remove_count,
+        picture_large_count=picture_large_count,
+        ladder_required=to_bool(ladder_required),
+        parking_notes=parking_notes,
+        preferred_contact=preferred_contact,
+        gallery_wall=to_bool(gallery_wall),
     )
 
     booking_url = build_booking_url(
@@ -908,6 +775,7 @@ async def quote_html(
         contact_email=contact_email,
         contact_phone=contact_phone,
         service=service,
+        estimated_hours=result.get("estimated_hours"),
     )
 
     background_tasks.add_task(
@@ -952,6 +820,7 @@ def get_quote(request_data: QuoteRequest, background_tasks: BackgroundTasks):
         contact_email=request_data.contact_email or "",
         contact_phone=request_data.contact_phone or "",
         service=request_data.service,
+        estimated_hours=result.get("estimated_hours"),
     )
 
     background_tasks.add_task(
@@ -975,4 +844,3 @@ def get_quote(request_data: QuoteRequest, background_tasks: BackgroundTasks):
         **result,
         "booking_url": booking_url,
     }
-

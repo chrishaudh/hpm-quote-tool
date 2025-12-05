@@ -5,6 +5,8 @@ __pycache__/
 # macOS junk
 .DS_Store
 
+static/*.DS_Store
+
 # Google Calendar secrets — NEVER commit these
 credentials.json
 token.json

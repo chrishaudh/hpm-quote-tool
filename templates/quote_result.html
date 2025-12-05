@@ -89,10 +89,6 @@
     .line-item-negative {
       color: #b91c1c;
     }
-    .line-item-sub {
-      font-size: 0.8rem;
-      color: #6b7280;
-    }
 
     .cta-card {
       background: #ffffff;
@@ -156,7 +152,7 @@
   <h1>Your Estimate</h1>
   <p class="lead">
     Here’s a rough estimate for your install based on the details you entered.
-    Final pricing may adjust slightly after we confirm everything on-site.
+    Final pricing may adjust slightly after we confirm the details on-site.
   </p>
 
   <!-- Summary Card -->
@@ -172,26 +168,27 @@
       <span class="summary-label">Subtotal before tax</span>
       <span class="summary-value">${{ '%.2f' % subtotal_before_tax }}</span>
     </div>
+
     <div class="summary-row">
       <span class="summary-label">Estimated tax ({{ '%.1f' % (tax_rate * 100) }}%)</span>
       <span class="summary-value">${{ '%.2f' % tax_amount }}</span>
     </div>
+
     <div class="summary-row total">
       <span class="summary-label">Estimated total</span>
       <span class="summary-value">${{ '%.2f' % estimated_total_with_tax }}</span>
     </div>
 
-    {% set li = line_items or {} %}
-    {% if li.multi_service_discount is defined and li.multi_service_discount != 0 %}
-      <p class="muted" style="margin-top:0.5rem;">
-        A <strong>multi-service discount</strong> has been applied for booking multiple
-        services in one visit.
-      </p>
+    {% if estimated_hours %}
+      <div class="summary-row">
+        <span class="summary-label">Estimated on-site time</span>
+        <span class="summary-value">{{ '%.1f' % estimated_hours }} hours</span>
+      </div>
     {% endif %}
 
     <p class="muted" style="margin-top:0.4rem;">
-      This estimate is based on your inputs and typical conditions.
-      You’ll be able to confirm final details before or during the visit.
+      This estimate is based on the information you provided and typical conditions.
+      If anything looks off, you can always ask questions before booking.
     </p>
   </div>
 
@@ -202,12 +199,13 @@
     <div class="line-items">
       {% set li = line_items or {} %}
 
-      {# TV mounting + removal #}
-      {% if li.tv_total is defined and li.tv_total != 0 %}
+      {% if li.tv_total and li.tv_total != 0 %}
         <div class="line-item-row">
           <span class="line-item-label">
             TV mounting
-            {% if tv_size and tv_size > 0 %}
+            {% if tv_count and tv_count > 0 %}
+              ({{ tv_count }} TV{% if tv_count != 1 %}s{% endif %}{% if tv_size and tv_size > 0 %}, {{ tv_size }}"{% endif %})
+            {% elif tv_size and tv_size > 0 %}
               ({{ tv_size }}")
             {% endif %}
           </span>
@@ -215,49 +213,35 @@
         </div>
       {% endif %}
 
-      {% if li.tv_removal_total is defined and li.tv_removal_total != 0 %}
+      {% if li.tv_removal_total and li.tv_removal_total != 0 %}
         <div class="line-item-row">
           <span class="line-item-label">
-            Remove existing TV / bracket / shelf
-            {% if tv_shelf_removal_count is defined and tv_shelf_removal_count %}
-              ({{ tv_shelf_removal_count }} item{% if tv_shelf_removal_count != 1 %}s{% endif %})
+            TV removal / relocation
+            {% if tv_remove_count and tv_remove_count > 0 %}
+              ({{ tv_remove_count }} TV{% if tv_remove_count != 1 %}s{% endif %})
             {% endif %}
           </span>
           <span class="line-item-value">${{ '%.2f' % li.tv_removal_total }}</span>
         </div>
       {% endif %}
 
-      {# Picture & art hanging + large item surcharge #}
-      {% if li.picture_total is defined and li.picture_total != 0 %}
+      {% if li.picture_total and li.picture_total != 0 %}
         <div class="line-item-row">
           <span class="line-item-label">
             Picture &amp; art hanging
             {% if picture_count and picture_count > 0 %}
-              ({{ picture_count }} piece{% if picture_count != 1 %}s{% endif %})
+              ({{ picture_count }} pieces{% if picture_large_count and picture_large_count > 0 %}, {{ picture_large_count }} large{% endif %})
             {% endif %}
           </span>
           <span class="line-item-value">${{ '%.2f' % li.picture_total }}</span>
         </div>
       {% endif %}
 
-      {% if li.picture_large_art_fee is defined and li.picture_large_art_fee != 0 %}
+      {% if li.shelves_total and li.shelves_total != 0 %}
         <div class="line-item-row">
           <span class="line-item-label">
-            Large item surcharge
-            {% if large_picture_count is defined and large_picture_count %}
-              ({{ large_picture_count }} piece{% if large_picture_count != 1 %}s{% endif %} &gt; 6ft)
-            {% endif %}
-          </span>
-          <span class="line-item-value">${{ '%.2f' % li.picture_large_art_fee }}</span>
-        </div>
-      {% endif %}
-
-      {# Floating shelves + removal #}
-      {% if li.shelves_total is defined and li.shelves_total != 0 %}
-        <div class="line-item-row">
-          <span class="line-item-label">
-            Floating shelves
-            {% if shelves_count is defined and shelves_count and shelves_count > 0 %}
+            Floating shelves install
+            {% if shelves_count and shelves_count > 0 %}
               ({{ shelves_count }} shelf{% if shelves_count != 1 %}s{% endif %})
             {% endif %}
           </span>
@@ -265,86 +249,84 @@
         </div>
       {% endif %}
 
-      {% if li.floating_removal_total is defined and li.floating_removal_total != 0 %}
+      {% if li.shelves_removal_total and li.shelves_removal_total != 0 %}
         <div class="line-item-row">
           <span class="line-item-label">
-            Remove floating shelves
-            {% if floating_shelf_removal_count is defined and floating_shelf_removal_count %}
-              ({{ floating_shelf_removal_count }} shelf{% if floating_shelf_removal_count != 1 %}s{% endif %})
+            Floating shelf removal / replacement
+            {% if shelves_remove_count and shelves_remove_count > 0 %}
+              ({{ shelves_remove_count }} shelf{% if shelves_remove_count != 1 %}s{% endif %})
             {% endif %}
           </span>
-          <span class="line-item-value">${{ '%.2f' % li.floating_removal_total }}</span>
+          <span class="line-item-value">${{ '%.2f' % li.shelves_removal_total }}</span>
         </div>
       {% endif %}
 
-      {# Closet shelving + removal #}
-      {% if li.closet_total is defined and li.closet_total != 0 %}
+      {% if li.closet_total and li.closet_total != 0 %}
         <div class="line-item-row">
           <span class="line-item-label">
             Closet shelving / organizers
-            {% if closet_shelf_count is defined and closet_shelf_count and closet_shelf_count > 0 %}
+            {% if closet_shelf_count and closet_shelf_count > 0 %}
               ({{ closet_shelf_count }} shelf{% if closet_shelf_count != 1 %}s{% endif %})
             {% endif %}
             {% if closet_needs_materials %}
-              <span class="line-item-sub"> – materials purchase requested</span>
+              <span class="muted">(materials purchase requested)</span>
             {% endif %}
           </span>
           <span class="line-item-value">${{ '%.2f' % li.closet_total }}</span>
         </div>
       {% endif %}
 
-      {% if li.closet_removal_total is defined and li.closet_removal_total != 0 %}
+      {% if li.closet_removal_total and li.closet_removal_total != 0 %}
         <div class="line-item-row">
           <span class="line-item-label">
-            Remove closet shelves
-            {% if closet_shelf_removal_count is defined and closet_shelf_removal_count %}
-              ({{ closet_shelf_removal_count }} shelf{% if closet_shelf_removal_count != 1 %}s{% endif %})
+            Closet shelf removal / replacement
+            {% if closet_remove_count and closet_remove_count > 0 %}
+              ({{ closet_remove_count }} shelf{% if closet_remove_count != 1 %}s{% endif %})
             {% endif %}
           </span>
           <span class="line-item-value">${{ '%.2f' % li.closet_removal_total }}</span>
         </div>
       {% endif %}
 
-      {# Curtains / Blinds / Decor #}
-      {% if li.decor_total is defined and li.decor_total != 0 %}
+      {% if li.decor_total and li.decor_total != 0 %}
         <div class="line-item-row">
           <span class="line-item-label">
-            Curtains / blinds / decor
+            Curtains / blinds / decor install
             {% if decor_count and decor_count > 0 %}
-              ({{ decor_count }} piece{% if decor_count != 1 %}s{% endif %})
+              ({{ decor_count }} item{% if decor_count != 1 %}s{% endif %})
             {% endif %}
           </span>
           <span class="line-item-value">${{ '%.2f' % li.decor_total }}</span>
         </div>
       {% endif %}
 
-      {# Combined removal total (informational) #}
-      {% if li.removal_total is defined and li.removal_total != 0 %}
+      {% if li.decor_removal_total and li.decor_removal_total != 0 %}
         <div class="line-item-row">
           <span class="line-item-label">
-            Total removal labor
+            Curtains / blinds / decor removal
+            {% if decor_remove_count and decor_remove_count > 0 %}
+              ({{ decor_remove_count }} item{% if decor_remove_count != 1 %}s{% endif %})
+            {% endif %}
           </span>
-          <span class="line-item-value">${{ '%.2f' % li.removal_total }}</span>
+          <span class="line-item-value">${{ '%.2f' % li.decor_removal_total }}</span>
         </div>
       {% endif %}
 
-      {# Same-day / after-hours (if ever used in quote) #}
-      {% if li.same_day_surcharge is defined and li.same_day_surcharge != 0 %}
+      {% if li.same_day_surcharge and li.same_day_surcharge != 0 %}
         <div class="line-item-row">
           <span class="line-item-label">Same-day preference surcharge</span>
           <span class="line-item-value">${{ '%.2f' % li.same_day_surcharge }}</span>
         </div>
       {% endif %}
 
-      {% if li.after_hours_surcharge is defined and li.after_hours_surcharge != 0 %}
+      {% if li.after_hours_surcharge and li.after_hours_surcharge != 0 %}
         <div class="line-item-row">
           <span class="line-item-label">After-hours preference surcharge</span>
           <span class="line-item-value">${{ '%.2f' % li.after_hours_surcharge }}</span>
         </div>
       {% endif %}
 
-      {# Multi-service discount #}
-      {% if li.multi_service_discount is defined and li.multi_service_discount != 0 %}
+      {% if li.multi_service_discount and li.multi_service_discount != 0 %}
         <div class="line-item-row">
           <span class="line-item-label">Multi-service discount</span>
           <span class="line-item-value line-item-negative">
@@ -352,60 +334,21 @@
           </span>
         </div>
       {% endif %}
-    </div>
 
-    <p class="muted" style="margin-top:0.5rem;">
-      All numbers are approximate and based on standard conditions. If something
-      unusual comes up (very high ceilings, special wall types, etc.), we’ll discuss
-      any adjustments with you before moving forward.
-    </p>
-  </div>
-
-  <!-- Flags / Notes Card -->
-  <div class="card">
-    <h2 class="section-title">Job Notes &amp; Preferences</h2>
-
-    <div class="line-items">
-      {% if gallery_wall is defined and gallery_wall %}
+      {% if li.minimum_adjustment and li.minimum_adjustment != 0 %}
         <div class="line-item-row">
-          <span class="line-item-label">Gallery wall planned</span>
-          <span class="line-item-sub">Layout and spacing may take additional planning time.</span>
-        </div>
-      {% endif %}
-
-      {% if ladder_required is defined and ladder_required %}
-        <div class="line-item-row">
-          <span class="line-item-label">Ladder required</span>
-          <span class="line-item-sub">We’ll plan for higher reach or tall ceilings.</span>
-        </div>
-      {% endif %}
-
-      {% if contact_method is defined and contact_method %}
-        <div class="line-item-row">
-          <span class="line-item-label">Preferred contact method</span>
+          <span class="line-item-label">Minimum job adjustment</span>
           <span class="line-item-value">
-            {{ contact_method | capitalize }}
+            ${{ '%.2f' % li.minimum_adjustment }}
           </span>
         </div>
       {% endif %}
-
-      {% if building_notes is defined and building_notes %}
-        <div class="line-item-row" style="align-items:flex-start;">
-          <span class="line-item-label">Parking / building notes</span>
-          <span class="line-item-sub" style="max-width:360px;">{{ building_notes }}</span>
-        </div>
-      {% endif %}
-
-      {% if (not (gallery_wall is defined and gallery_wall)) 
-            and (not (ladder_required is defined and ladder_required)) 
-            and (not (contact_method is defined and contact_method)) 
-            and (not (building_notes is defined and building_notes)) %}
-        <p class="muted">
-          No special notes were added. If you have gate codes, parking details, or
-          anything else I should know, feel free to email or mention it when booking.
-        </p>
-      {% endif %}
     </div>
+
+    <p class="muted" style="margin-top:0.5rem;">
+      If you selected closet shelving with materials, I’ll confirm shelf style and
+      materials budget with you before purchasing anything.
+    </p>
   </div>
 
   <!-- CTA Card -->

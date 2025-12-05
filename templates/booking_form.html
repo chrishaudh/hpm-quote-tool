@@ -76,18 +76,6 @@
       padding: 0.9rem 1rem;
       background: #fafafa;
       border: 1px solid #e3e3e3;
-      margin-top: 0.25rem;
-    }
-    .checkbox-row {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      margin: 0.25rem 0;
-      font-size: 0.9rem;
-    }
-    .checkbox-row label {
-      margin: 0;
-      font-weight: 500;
     }
     .hint {
       font-size: 0.8rem;
@@ -98,36 +86,12 @@
       font-size: 0.8rem;
       margin-top: 0.15rem;
     }
-    .service-section {
-      border-radius: 0.75rem;
-      padding: 0.9rem 1rem;
-      background: #fafafa;
-      border: 1px solid #e3e3e3;
-      margin-top: 0.35rem;
-    }
-    .service-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 0.5rem;
-      margin-bottom: 0.25rem;
-    }
-    .service-name {
-      font-weight: 600;
-      font-size: 0.95rem;
-    }
-    .badge-primary {
-      display: inline-flex;
-      align-items: center;
-      padding: 0.15rem 0.5rem;
-      border-radius: 999px;
-      font-size: 0.75rem;
-      background: #eff6ff;
-      color: #1d4ed8;
-      font-weight: 600;
-    }
-    .service-details {
-      margin-top: 0.4rem;
+    ul.service-list {
+      list-style: disc;
+      padding-left: 1.25rem;
+      margin: 0.25rem 0 0;
+      font-size: 0.9rem;
+      color: #111827;
     }
     @media (max-width: 600px) {
       .two-col {
@@ -137,36 +101,72 @@
   </style>
 </head>
 <body>
-  <!-- Logo -->
-  <div style="text-align:center; margin-bottom:1rem;">
+  <div style="text-align:center; margin-bottom:0.75rem;">
     <img
-      src="https://drive.google.com/uc?export=view&id=1SbrKM-MUQVRgHX5X815Bma_QW6BSRvJJ"
+      src="/static/hpm-logo.png"
       alt="Hawkins Pro Mounting logo"
-      style="max-width:160px; height:auto;"
+      style="max-width:180px; height:auto;"
     />
   </div>
 
   <h1>Book Your Installation</h1>
   <p class="lead">
-    Choose a day and time that works for you. Then confirm which services
-    we’ll handle in this visit. We’ll send a confirmation to your email.
+    Choose a day and time that works for you. Your service details are copied
+    from your quote so you don’t have to re-enter anything.
   </p>
 
   <form method="post" action="/book">
-    <!-- Service selection -->
+    <!-- carry estimated hours from quote into the booking POST -->
+  <input
+    type="hidden"
+    id="estimated_hours"
+    name="estimated_hours"
+    value="{{ prefilled.estimated_hours or '' }}"
+  />
+    <!-- Primary service (read-only) -->
     <div class="field-group">
-      <label for="service_type">Primary service</label>
-      <select id="service_type" name="service_type" required>
-        {% for s in service_types %}
-        <option value="{{ s }}"
-          {% if prefilled.service_type == s %}selected{% endif %}>
-          {{ s }}
-        </option>
-        {% endfor %}
-      </select>
+      <label>Primary service</label>
+      <div>
+        {{ prefilled.service_type or "TV Mounting" }}
+      </div>
       <p class="hint">
-        Your main service will always be included in this visit.
+        These services and details are based on the quote you just completed.
       </p>
+    </div>
+
+    <!-- Services this visit (read-only summary + hidden flags) -->
+    <div class="card">
+      <label style="font-weight:600; margin-bottom:0.25rem;">
+        Services included in this visit
+      </label>
+      <ul class="service-list">
+        {% if booking.has_tv %}
+          <li>TV Mounting</li>
+        {% endif %}
+        {% if booking.has_pictures %}
+          <li>Picture &amp; Art Hanging</li>
+        {% endif %}
+        {% if booking.has_shelves %}
+          <li>Floating Shelves</li>
+        {% endif %}
+        {% if booking.has_closet %}
+          <li>Closet Shelving / Organizers</li>
+        {% endif %}
+        {% if booking.has_decor %}
+          <li>Curtains / Blinds / Decor</li>
+        {% endif %}
+        {% if not (booking.has_tv or booking.has_pictures or booking.has_shelves or booking.has_closet or booking.has_decor) %}
+          <li>Details will be confirmed at time of booking.</li>
+        {% endif %}
+      </ul>
+
+      <!-- Hidden fields so backend still knows what to schedule -->
+      <input type="hidden" name="service_type" value="{{ prefilled.service_type or 'TV Mounting' }}" />
+      <input type="hidden" name="include_tv" value="{{ 'true' if booking.has_tv else 'false' }}" />
+      <input type="hidden" name="include_pictures" value="{{ 'true' if booking.has_pictures else 'false' }}" />
+      <input type="hidden" name="include_shelves" value="{{ 'true' if booking.has_shelves else 'false' }}" />
+      <input type="hidden" name="include_closet" value="{{ 'true' if booking.has_closet else 'false' }}" />
+      <input type="hidden" name="include_decor" value="{{ 'true' if booking.has_decor else 'false' }}" />
     </div>
 
     <!-- Date & time -->
@@ -183,323 +183,6 @@
         <span class="hint">
           Times shown are based on your current schedule and other bookings.
         </span>
-        <div class="checkbox-row" style="margin-top:0.4rem;">
-          <input id="after_hours_flexible" type="checkbox" />
-          <label for="after_hours_flexible">
-            I’m flexible on evenings / after 5 PM
-          </label>
-        </div>
-        <p class="hint" style="margin-top:0.1rem;">
-          When checked, later time slots (5–9 PM) for this date will be shown if available.
-        </p>
-      </div>
-    </div>
-
-    <!-- Service sections (primary vs optional handled in JS) -->
-    <div>
-      <label style="font-weight:600; margin-bottom:0.25rem; display:block;">
-        Services for this visit
-      </label>
-      <p class="hint" style="margin-bottom:0.4rem;">
-        Your primary service is always included. You can also add optional services —
-        their details appear when selected.
-      </p>
-
-      <!-- TV Mounting -->
-      <div class="service-section" data-service="TV Mounting">
-        <div class="service-header">
-          <span class="service-name">TV Mounting</span>
-          <span class="badge-primary" data-role="primary-label" style="display:none;">
-            Primary
-          </span>
-        </div>
-
-        <p class="hint" data-role="primary-help" style="display:none;">
-          This is your main service for this visit and will always be included.
-        </p>
-
-        <div class="checkbox-row" data-role="optional-row">
-          <input
-            id="include_tv"
-            name="include_tv"
-            type="checkbox"
-            value="true"
-          />
-          <label for="include_tv">Add TV mounting to this visit</label>
-        </div>
-
-        <div class="service-details" data-service-details style="display:none;">
-          <p class="hint">
-            You can add TV size, wall type, and cable-hiding details in the notes below
-            if needed. Standard visits assume 1 TV.
-          </p>
-        </div>
-      </div>
-
-      <!-- Picture & Art Hanging -->
-      <div class="service-section" data-service="Picture & Art Hanging">
-        <div class="service-header">
-          <span class="service-name">Picture &amp; Art Hanging</span>
-          <span class="badge-primary" data-role="primary-label" style="display:none;">
-            Primary
-          </span>
-        </div>
-
-        <p class="hint" data-role="primary-help" style="display:none;">
-          This is your main service for this visit and will always be included.
-        </p>
-
-        <div class="checkbox-row" data-role="optional-row">
-          <input
-            id="include_pictures"
-            name="include_pictures"
-            type="checkbox"
-            value="true"
-          />
-          <label for="include_pictures">Add picture &amp; art hanging to this visit</label>
-        </div>
-
-        <div class="service-details" data-service-details style="display:none;">
-          <div class="field-group">
-            <label for="picture_total_count">Total number of pictures / art pieces</label>
-            <input
-              id="picture_total_count"
-              name="picture_total_count"
-              type="number"
-              min="0"
-              value="0"
-            />
-          </div>
-
-          <div class="checkbox-row" style="margin-top:0.3rem;">
-            <input
-              id="picture_large_toggle"
-              name="picture_has_large"
-              type="checkbox"
-              value="true"
-            />
-            <label for="picture_large_toggle">
-              Items larger than 5 ft wide?
-            </label>
-          </div>
-
-          <div class="field-group" id="picture_large_section" style="display:none; margin-top:0.3rem;">
-            <label for="picture_large_count">
-              Number of pieces larger than 5 ft wide
-            </label>
-            <input
-              id="picture_large_count"
-              name="picture_large_count"
-              type="number"
-              min="0"
-              value="0"
-            />
-          </div>
-
-          <div class="checkbox-row" style="margin-top:0.3rem;">
-            <input
-              id="gallery_wall"
-              name="gallery_wall"
-              type="checkbox"
-              value="true"
-            />
-            <label for="gallery_wall">Gallery wall?</label>
-          </div>
-
-          <p class="hint" style="margin-top:0.3rem;">
-            Larger, oversized pieces and complex gallery walls help plan time and hardware.
-            There’s no extra charge just for the gallery wall flag.
-          </p>
-        </div>
-      </div>
-
-      <!-- Floating Shelves -->
-      <div class="service-section" data-service="Floating Shelves">
-        <div class="service-header">
-          <span class="service-name">Floating Shelves</span>
-          <span class="badge-primary" data-role="primary-label" style="display:none;">
-            Primary
-          </span>
-        </div>
-
-        <p class="hint" data-role="primary-help" style="display:none;">
-          This is your main service for this visit and will always be included.
-        </p>
-
-        <div class="checkbox-row" data-role="optional-row">
-          <input
-            id="include_shelves"
-            name="include_shelves"
-            type="checkbox"
-            value="true"
-          />
-          <label for="include_shelves">Add floating shelves to this visit</label>
-        </div>
-
-        <div class="service-details" data-service-details style="display:none;">
-          <div class="two-col">
-            <div class="field-group">
-              <label for="shelves_install_count">
-                Number of floating shelves to install
-              </label>
-              <input
-                id="shelves_install_count"
-                name="shelves_install_count"
-                type="number"
-                min="0"
-                value="0"
-              />
-            </div>
-            <div class="field-group">
-              <div class="checkbox-row" style="margin-top:1.4rem;">
-                <input
-                  id="shelves_remove_toggle"
-                  type="checkbox"
-                />
-                <label for="shelves_remove_toggle">Remove shelves?</label>
-              </div>
-            </div>
-          </div>
-
-          <div
-            class="field-group"
-            data-remove-section
-            data-toggle="shelves_remove_toggle"
-            style="display:none; margin-top:0.3rem;"
-          >
-            <label for="shelves_remove_count">
-              Number of shelves to remove
-            </label>
-            <input
-              id="shelves_remove_count"
-              name="shelves_remove_count"
-              type="number"
-              min="0"
-              value="0"
-            />
-            <p class="hint">
-              Removal-only jobs are okay. Floating shelf removal is typically a smaller
-              charge per shelf.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Closet Shelving -->
-      <div class="service-section" data-service="Closet Shelving">
-        <div class="service-header">
-          <span class="service-name">Closet Shelving / Organizers</span>
-          <span class="badge-primary" data-role="primary-label" style="display:none;">
-            Primary
-          </span>
-        </div>
-
-        <p class="hint" data-role="primary-help" style="display:none;">
-          This is your main service for this visit and will always be included.
-        </p>
-
-        <div class="checkbox-row" data-role="optional-row">
-          <input
-            id="include_closet"
-            name="include_closet"
-            type="checkbox"
-            value="true"
-          />
-          <label for="include_closet">Add closet shelving / organizers</label>
-        </div>
-
-        <div class="service-details" data-service-details style="display:none;">
-          <div class="two-col">
-            <div class="field-group">
-              <label for="closet_install_count">
-                Number of closet shelves to install
-              </label>
-              <input
-                id="closet_install_count"
-                name="closet_install_count"
-                type="number"
-                min="0"
-                value="0"
-              />
-            </div>
-            <div class="field-group">
-              <div class="checkbox-row" style="margin-top:1.4rem;">
-                <input
-                  id="closet_remove_toggle"
-                  type="checkbox"
-                />
-                <label for="closet_remove_toggle">Remove shelves?</label>
-              </div>
-            </div>
-          </div>
-
-          <div
-            class="field-group"
-            data-remove-section
-            data-toggle="closet_remove_toggle"
-            style="display:none; margin-top:0.3rem;"
-          >
-            <label for="closet_remove_count">
-              Number of closet shelves to remove
-            </label>
-            <input
-              id="closet_remove_count"
-              name="closet_remove_count"
-              type="number"
-              min="0"
-              value="0"
-            />
-            <p class="hint">
-              Removal-only jobs are okay. Closet shelf removal usually adds a bit of
-              time for patching and cleanup.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Curtains / Blinds / Decor -->
-      <div class="service-section" data-service="Curtains & Blinds">
-        <div class="service-header">
-          <span class="service-name">Curtains / Blinds / Decor</span>
-          <span class="badge-primary" data-role="primary-label" style="display:none;">
-            Primary
-          </span>
-        </div>
-
-        <p class="hint" data-role="primary-help" style="display:none;">
-          This is your main service for this visit and will always be included.
-        </p>
-
-        <div class="checkbox-row" data-role="optional-row">
-          <input
-            id="include_decor"
-            name="include_decor"
-            type="checkbox"
-            value="true"
-          />
-          <label for="include_decor">
-            Add curtains / blinds / decor to this visit
-          </label>
-        </div>
-
-        <div class="service-details" data-service-details style="display:none;">
-          <div class="field-group">
-            <label for="decor_item_count">
-              Number of curtain panels / blinds / decor items
-            </label>
-            <input
-              id="decor_item_count"
-              name="decor_item_count"
-              type="number"
-              min="0"
-              value="0"
-            />
-          </div>
-          <p class="hint" style="margin-top:0.3rem;">
-            This helps plan time for measuring, drilling, and leveling, especially for
-            multiple windows or mixed decor.
-          </p>
-        </div>
       </div>
     </div>
 
@@ -596,49 +279,13 @@
       </p>
     </div>
 
-    <!-- Extra details -->
-    <div class="card">
-      <div class="two-col">
-        <div class="field-group">
-          <label for="contact_method">Preferred contact method (optional)</label>
-          <select id="contact_method" name="contact_method">
-            <option value="">No preference</option>
-            <option value="text">Text</option>
-            <option value="call">Call</option>
-            <option value="email">Email</option>
-          </select>
-        </div>
-        <div class="field-group">
-          <label class="checkbox-row" style="margin-top:1.6rem;">
-            <input
-              id="ladder_required"
-              name="ladder_required"
-              type="checkbox"
-              value="true"
-            />
-            <span>Ladder required?</span>
-          </label>
-        </div>
-      </div>
-
-      <div class="field-group">
-        <label for="building_notes">Parking / building access notes (optional)</label>
-        <textarea
-          id="building_notes"
-          name="building_notes"
-          rows="2"
-          placeholder="Gate codes, garage parking, concierge, elevator access, etc."
-        ></textarea>
-      </div>
-    </div>
-
     <div class="field-group">
-      <label for="notes">Project notes (optional)</label>
+      <label for="notes">Notes (optional)</label>
       <textarea
         id="notes"
         name="notes"
         rows="3"
-        placeholder="TV size, wall type, number of rooms, or anything else you’d like me to know."
+        placeholder="TV size, wall type, parking or building notes, etc."
       ></textarea>
     </div>
 
@@ -646,8 +293,9 @@
   </form>
 
   <script>
-    // ---------- Time slot handling ----------
-    let allSlots = [];
+    // Estimated hours passed from the quote (can be "" or a number like "3.5")
+    const estimatedHoursStr = "{{ prefilled.estimated_hours or '' }}";
+    const ESTIMATED_HOURS_FROM_QUOTE = estimatedHoursStr ? parseFloat(estimatedHoursStr) : null;
 
     // Helper: format time as "H:MM AM/PM"
     function formatTimeLabel(isoString) {
@@ -661,44 +309,9 @@
       return `${hours}:${minutesStr} ${ampm}`;
     }
 
-    function renderSlots(includeEvening) {
-      const select = document.getElementById("time_slot");
-      select.innerHTML = "";
-
-      if (!allSlots || allSlots.length === 0) {
-        select.innerHTML = '<option value="">No times available for this day</option>';
-        return;
-      }
-
-      const showEvening = !!includeEvening;
-      let any = false;
-
-      for (const slot of allSlots) {
-        const startDate = new Date(slot.start);
-        const hour = startDate.getHours(); // 0-23 local
-
-        // Hide 5pm and later unless "flexible after 5 PM" is checked.
-        if (!showEvening && hour >= 17) {
-          continue;
-        }
-
-        any = true;
-        const label = `${formatTimeLabel(slot.start)} – ${formatTimeLabel(slot.end)}`;
-        const opt = document.createElement("option");
-        opt.value = slot.start;
-        opt.textContent = label;
-        select.appendChild(opt);
-      }
-
-      if (!any) {
-        select.innerHTML = '<option value="">No times available for this day</option>';
-      }
-    }
-
     async function loadAvailabilityFor(dateStr) {
       const select = document.getElementById("time_slot");
       select.innerHTML = '<option value="">Loading times...</option>';
-      allSlots = [];
 
       if (!dateStr) {
         select.innerHTML = '<option value="">Select a time...</option>';
@@ -712,15 +325,35 @@
           return;
         }
         const data = await resp.json();
-        allSlots = data.slots || [];
+        const slots = data.slots || [];
 
-        if (!allSlots.length) {
+        if (!slots.length) {
           select.innerHTML = '<option value="">No times available for this day</option>';
           return;
         }
 
-        const afterHoursCheckbox = document.getElementById("after_hours_flexible");
-        renderSlots(afterHoursCheckbox && afterHoursCheckbox.checked);
+                select.innerHTML = "";
+        for (const slot of slots) {
+          const startDate = new Date(slot.start);
+
+          // If we have an estimated duration from the quote, use it to build the label end time.
+          // Otherwise, fall back to whatever the availability API gives us for slot.end.
+          let endDateForLabel;
+          if (ESTIMATED_HOURS_FROM_QUOTE && ESTIMATED_HOURS_FROM_QUOTE > 0) {
+            const msToAdd = ESTIMATED_HOURS_FROM_QUOTE * 60 * 60 * 1000;
+            endDateForLabel = new Date(startDate.getTime() + msToAdd);
+          } else {
+            endDateForLabel = new Date(slot.end);
+          }
+
+          const label = `${formatTimeLabel(startDate.toISOString())} – ${formatTimeLabel(endDateForLabel.toISOString())}`;
+
+          const opt = document.createElement("option");
+          opt.value = slot.start; // submit the ISO start time
+          opt.textContent = label;
+          select.appendChild(opt);
+        }
+
       } catch (e) {
         console.error("Error loading availability", e);
         select.innerHTML = '<option value="">Error loading times</option>';
@@ -738,136 +371,6 @@
 
     dateInput.addEventListener("change", (e) => {
       loadAvailabilityFor(e.target.value);
-    });
-
-    const afterHoursCheckbox = document.getElementById("after_hours_flexible");
-    if (afterHoursCheckbox) {
-      afterHoursCheckbox.addEventListener("change", () => {
-        renderSlots(afterHoursCheckbox.checked);
-      });
-    }
-
-    // ---------- Remove-section toggles (shelves / closet) ----------
-    document.querySelectorAll("[data-remove-section]").forEach((section) => {
-      const toggleId = section.getAttribute("data-toggle");
-      const toggle = document.getElementById(toggleId);
-
-      function syncRemove() {
-        if (toggle && toggle.checked) {
-          section.style.display = "grid";
-        } else {
-          section.style.display = "none";
-        }
-      }
-
-      syncRemove();
-      if (toggle) {
-        toggle.addEventListener("change", syncRemove);
-      }
-    });
-
-    // ---------- Large art section ----------
-    const pictureLargeToggle = document.getElementById("picture_large_toggle");
-    const pictureLargeSection = document.getElementById("picture_large_section");
-
-    function syncLargeArt() {
-      if (!pictureLargeSection) return;
-      if (pictureLargeToggle && pictureLargeToggle.checked) {
-        pictureLargeSection.style.display = "grid";
-      } else {
-        pictureLargeSection.style.display = "none";
-      }
-    }
-
-    if (pictureLargeToggle) {
-      pictureLargeToggle.addEventListener("change", syncLargeArt);
-      syncLargeArt();
-    }
-
-    // ---------- Primary vs optional service behavior ----------
-    const serviceSelect = document.getElementById("service_type");
-    const serviceSections = document.querySelectorAll(".service-section");
-
-    function syncServiceSections() {
-      const primary = serviceSelect.value;
-
-      serviceSections.forEach((section) => {
-        const serviceName = section.getAttribute("data-service");
-        const isPrimary = serviceName === primary;
-
-        const primaryLabel = section.querySelector('[data-role="primary-label"]');
-        const primaryHelp = section.querySelector('[data-role="primary-help"]');
-        const optionalRow = section.querySelector('[data-role="optional-row"]');
-        const details = section.querySelector("[data-service-details]");
-        const checkbox = optionalRow
-          ? optionalRow.querySelector('input[type="checkbox"]')
-          : null;
-
-        if (isPrimary) {
-          // Mark as primary
-          if (primaryLabel) primaryLabel.style.display = "inline-flex";
-          if (primaryHelp) primaryHelp.style.display = "block";
-          if (optionalRow) optionalRow.style.display = "none";
-          if (checkbox) {
-            checkbox.checked = true; // primary must be included
-          }
-          if (details) {
-            details.style.display = "block";
-          }
-          section.style.borderColor = "#2563eb";
-        } else {
-          // Optional behavior
-          if (primaryLabel) primaryLabel.style.display = "none";
-          if (primaryHelp) primaryHelp.style.display = "none";
-          if (optionalRow) optionalRow.style.display = "flex";
-          section.style.borderColor = "#e3e3e3";
-
-          if (details) {
-            if (checkbox && checkbox.checked) {
-              details.style.display = "block";
-            } else {
-              details.style.display = "none";
-            }
-          }
-        }
-
-        // When an optional checkbox changes, toggle its details
-        if (checkbox && !checkbox.dataset.bound) {
-          checkbox.dataset.bound = "true";
-          checkbox.addEventListener("change", () => {
-            if (!details) return;
-            if (serviceSelect.value === serviceName) {
-              // Primary service already shows details
-              details.style.display = "block";
-            } else {
-              details.style.display = checkbox.checked ? "block" : "none";
-            }
-          });
-        }
-      });
-    }
-
-    if (serviceSelect) {
-      serviceSelect.addEventListener("change", syncServiceSections);
-      // Initial sync on load
-      syncServiceSections();
-    }
-
-    // Ensure primary service is always included when submitting
-    document.querySelector("form").addEventListener("submit", function () {
-      const serviceType = document.getElementById("service_type").value;
-      const map = {
-        "TV Mounting": "include_tv",
-        "Picture & Art Hanging": "include_pictures",
-        "Floating Shelves": "include_shelves",
-        "Closet Shelving": "include_closet",
-        "Curtains & Blinds": "include_decor",
-      };
-      const checkboxId = map[serviceType];
-      if (checkboxId) {
-        const cb = document.getElementById(checkboxId);
-        if (cb) cb.checked = true;
-      }
     });
   </script>
 </body>

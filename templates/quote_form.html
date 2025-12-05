@@ -12,13 +12,27 @@
       padding: 1.5rem;
       background-color: #f7f7f7;
     }
+    header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+    header img {
+      max-width: 200px;
+      height: auto;
+      display: block;
+    }
     h1 {
       font-size: 1.6rem;
-      margin-bottom: 0.5rem;
+      margin-bottom: 0.25rem;
+      text-align: center;
     }
     p.lead {
       margin-bottom: 1.5rem;
       color: #555;
+      text-align: center;
     }
     form {
       background: #fff;
@@ -102,6 +116,11 @@
       font-size: 0.8rem;
       color: #6b7280;
     }
+    .optional-note {
+      font-size: 0.85rem;
+      color: #6b7280;
+      margin-bottom: 0.25rem;
+    }
     @media (max-width: 640px) {
       .two-col {
         grid-template-columns: 1fr;
@@ -110,11 +129,14 @@
   </style>
 </head>
 <body>
-  <h1>Get a Fast Quote</h1>
-  <p class="lead">
-    Tell me what you need done. You can mix and match multiple services in one visit
-    (TV mounting, picture hanging, shelves, closet shelving, and curtains / blinds / decor).
-  </p>
+  <header>
+    <img src="/static/hpm-logo.png" alt="Hawkins Pro Mounting logo" />
+    <h1>Get a Fast Quote</h1>
+    <p class="lead">
+      Tell me what you need done. You can mix and match multiple services in one visit
+      (TV mounting, picture & art hanging, shelves, closet shelving, and curtains/blinds/decor).
+    </p>
+  </header>
 
   <form method="post" action="/quote-html">
     <!-- Contact Info -->
@@ -134,18 +156,28 @@
         <label for="contact_email">Email</label>
         <input id="contact_email" name="contact_email" type="email" />
       </div>
-      <div class="field-group">
-        <label for="zip_code">ZIP Code</label>
-        <input id="zip_code" name="zip_code" type="text" value="20735" />
+      <div class="two-col">
+        <div class="field-group">
+          <label for="zip_code">ZIP Code</label>
+          <input id="zip_code" name="zip_code" type="text" value="20735" />
+        </div>
+        <div class="field-group">
+          <label for="preferred_contact">Preferred contact method</label>
+          <select id="preferred_contact" name="preferred_contact">
+            <option value="">No preference</option>
+            <option value="phone">Phone call</option>
+            <option value="text">Text message</option>
+            <option value="email">Email</option>
+          </select>
+        </div>
       </div>
     </section>
 
-    <!-- Primary Service Label -->
+    <!-- Primary Service -->
     <section>
       <h2 class="section-title">Main Service for This Visit</h2>
-      <p class="hint" style="margin-bottom:0.5rem;">
-        This just helps label the job. You can still add other services below —
-        pricing will include everything you select.
+      <p class="hint">
+        This just helps label the job. Your main service will show first. You can add other services below.
       </p>
       <div class="field-group">
         <label for="service">Primary service</label>
@@ -159,14 +191,47 @@
       </div>
     </section>
 
+    <!-- Primary service details (always shown first) -->
+    <section id="primary-service-details">
+      <!-- JS will move the selected service section here -->
+    </section>
+
+    <!-- Optional services list + sections -->
+    <section id="optional-services">
+      <h2 class="section-title">Add Other Services (Optional)</h2>
+      <p class="optional-note">
+        Check any additional services you’d like done in the same visit. Their details will appear below.
+      </p>
+
+      <div class="card" id="optional-service-checkboxes">
+        <!-- JS will render the service checkboxes here -->
+      </div>
+
+      <div id="optional-service-details">
+        <!-- JS will move non-primary service sections here -->
+      </div>
+    </section>
+
+    <!-- === SERVICE SECTIONS (TV, Pictures, Shelves, Closet, Curtains/Blinds/Decor) === -->
+
     <!-- TV Mounting -->
-    <section>
-      <h2 class="section-title">TV Mounting (optional)</h2>
+    <section id="section-tv" data-service-key="tv_mounting" class="service-section">
+      <h2 class="section-title">TV Mounting</h2>
       <h3 class="section-subtitle">
-        Basic TV mounting under 60" is about $60; 60" or larger is about $70 before wall type
-        and cable-hiding options.
+        A basic TV mounting under 60" is about $60; 60" or larger is about $70 before wall type & add-ons.
       </h3>
       <div class="card">
+              <div class="field-group">
+        <label for="tv_count">How many TVs?</label>
+        <input
+          id="tv_count"
+          name="tv_count"
+          type="number"
+          min="0"
+          value="1"
+        />
+      </div>
+      
         <div class="two-col">
           <div class="field-group">
             <label for="tv_size">TV size (inches)</label>
@@ -195,31 +260,37 @@
         <div class="two-col">
           <div class="checkbox-row">
             <input id="soundbar" name="soundbar" type="checkbox" value="true" />
-            <label for="soundbar">
-              Include soundbar installation
-            </label>
+            <label for="soundbar">Include soundbar installation</label>
           </div>
           <div class="checkbox-row">
             <input id="led" name="led" type="checkbox" value="true" />
-            <label for="led">
-              LED backlighting
-            </label>
+            <label for="led">LED backlighting</label>
           </div>
         </div>
 
-        <p class="hint" style="margin-top:0.4rem;">
-          If you only need TV removal or shelf removal, mention that in the notes and
-          we’ll adjust on the final quote.
-        </p>
+        <div class="field-group" style="margin-top:0.5rem;">
+          <label for="tv_remove_count">
+            How many TVs are being removed?
+            <span style="font-weight:400;">
+              (This includes items being relocated or replaced)
+            </span>
+          </label>
+          <input
+            id="tv_remove_count"
+            name="tv_remove_count"
+            type="number"
+            min="0"
+            value="0"
+          />
+        </div>
       </div>
     </section>
 
     <!-- Picture & Art Hanging -->
-    <section>
-      <h2 class="section-title">Picture &amp; Art Hanging (optional)</h2>
+    <section id="section-pictures" data-service-key="picture_hanging" class="service-section">
+      <h2 class="section-title">Picture &amp; Art Hanging</h2>
       <h3 class="section-subtitle">
-        1–2 items ≈ $30, 3–5 ≈ $60, 6–8 ≈ $90, with a bit more for larger sets.
-        Oversized pieces (over 5 ft wide) add a small surcharge.
+        1–2 pieces ≈ $30, 3–5 ≈ $60, 6–8 ≈ $90. Every 3 pieces after 2 increases the estimate.
       </h3>
       <div class="card">
         <div class="field-group">
@@ -227,128 +298,92 @@
           <input id="picture_count" name="picture_count" type="number" min="0" value="0" />
         </div>
 
-        <div class="checkbox-row" style="margin-top:0.3rem;">
-          <input id="picture_has_large" name="picture_has_large" type="checkbox" value="true" />
-          <label for="picture_has_large">Any items larger than 5 ft wide?</label>
-        </div>
-
-        <div class="field-group" id="picture_large_section" style="display:none; margin-top:0.3rem;">
-          <label for="picture_large_count">
-            Number of pieces larger than 5 ft wide
+        <div class="field-group" style="margin-top:0.5rem;">
+          <label for="large_picture_count">
+            How many pieces are 5 ft or wider?
           </label>
           <input
-            id="picture_large_count"
-            name="picture_large_count"
+            id="large_picture_count"
+            name="large_picture_count"
+            type="number"
+            min="0"
+            value="0"
+          />
+          <p class="hint">
+            Larger pieces usually need extra time and may add a small charge (e.g., every 1–2 large pieces).
+          </p>
+        </div>
+
+        <div class="checkbox-row" style="margin-top:0.5rem;">
+          <input id="gallery_wall" name="gallery_wall" type="checkbox" value="true" />
+          <label for="gallery_wall">Gallery wall?</label>
+        </div>
+      </div>
+    </section>
+
+    <!-- Floating Shelves -->
+    <section id="section-shelves" data-service-key="floating_shelves" class="service-section">
+      <h2 class="section-title">Floating Shelves</h2>
+      <h3 class="section-subtitle">
+        Floating shelves are priced roughly in pairs of shelves (with a $60 minimum).
+      </h3>
+      <div class="card">
+        <!-- Hidden flag that the backend already expects ('shelves' boolean) -->
+        <input type="hidden" id="shelves_flag" name="shelves" value="false" />
+
+        <div class="field-group">
+          <label for="shelves_count">How many floating shelves are being installed?</label>
+          <input
+            id="shelves_count"
+            name="shelves_count"
             type="number"
             min="0"
             value="0"
           />
         </div>
 
-        <div class="checkbox-row" style="margin-top:0.3rem;">
-          <input id="gallery_wall" name="gallery_wall" type="checkbox" value="true" />
-          <label for="gallery_wall">Gallery wall?</label>
+        <div class="field-group" style="margin-top:0.5rem;">
+          <label for="shelves_remove_count">
+            How many floating shelves are being removed?
+            <span style="font-weight:400;">
+              (This includes items being relocated or replaced)
+            </span>
+          </label>
+          <input
+            id="shelves_remove_count"
+            name="shelves_remove_count"
+            type="number"
+            min="0"
+            value="0"
+          />
         </div>
-
-        <p class="hint" style="margin-top:0.3rem;">
-          Checking “Gallery wall” just helps with planning; there’s no separate charge
-          just for that label.
-        </p>
       </div>
     </section>
 
-    <!-- Floating Shelves -->
-    <section>
-      <h2 class="section-title">Floating Shelves (optional)</h2>
+    <!-- Closet Shelving / Organizers -->
+    <section id="section-closet" data-service-key="closet_shelving" class="service-section">
+      <h2 class="section-title">Closet Shelving / Organizers</h2>
       <h3 class="section-subtitle">
-        Every 2 shelves is about $60 (1–2 = 60, 3–4 = 120, 5–6 = 180, etc.), with a small
-        fee for removals.
+        I can install closet shelving you already have, or purchase it for you and install it.
       </h3>
       <div class="card">
-        <div class="checkbox-row">
-          <input id="shelves" name="shelves" type="checkbox" value="true" />
-          <label for="shelves">
-            Include floating shelves in this visit
+        <!-- Hidden flag the backend already expects ('closet_shelving' boolean) -->
+        <input type="hidden" id="closet_flag" name="closet_shelving" value="false" />
+
+        <div class="field-group">
+          <label for="closet_shelf_count">
+            Approximate number of closet shelves to install
           </label>
+          <input
+            id="closet_shelf_count"
+            name="closet_shelf_count"
+            type="number"
+            min="0"
+            value="0"
+          />
         </div>
 
-        <div class="two-col" style="margin-top:0.5rem;">
-          <div class="field-group">
-            <label for="shelves_install_count">
-              Number of floating shelves to install
-            </label>
-            <input
-              id="shelves_install_count"
-              name="shelves_install_count"
-              type="number"
-              min="0"
-              value="0"
-            />
-          </div>
-          <div class="field-group">
-            <label for="shelves_remove_count">
-              Number of floating shelves to remove
-            </label>
-            <input
-              id="shelves_remove_count"
-              name="shelves_remove_count"
-              type="number"
-              min="0"
-              value="0"
-            />
-          </div>
-        </div>
-
-        <p class="hint" style="margin-top:0.3rem;">
-          Removal-only jobs are okay. Floating shelf removal is typically a smaller
-          charge per shelf.
-        </p>
-      </div>
-    </section>
-
-    <!-- Closet Shelving -->
-    <section>
-      <h2 class="section-title">Closet Shelving / Organizers (optional)</h2>
-      <h3 class="section-subtitle">
-        1 shelf ≈ $60, 2 ≈ $90, 3 ≈ $120, then about $30 for each additional shelf,
-        plus a small fee for removals.
-      </h3>
-      <div class="card">
-        <div class="checkbox-row">
-          <input id="closet_shelving" name="closet_shelving" type="checkbox" value="true" />
-          <label for="closet_shelving">
-            Include closet shelving / organizers in this visit
-          </label>
-        </div>
-
-        <div class="two-col" style="margin-top:0.5rem;">
-          <div class="field-group">
-            <label for="closet_install_count">
-              Number of closet shelves to install
-            </label>
-            <input
-              id="closet_install_count"
-              name="closet_install_count"
-              type="number"
-              min="0"
-              value="0"
-            />
-          </div>
-          <div class="field-group">
-            <label for="closet_remove_count">
-              Number of closet shelves to remove
-            </label>
-            <input
-              id="closet_remove_count"
-              name="closet_remove_count"
-              type="number"
-              min="0"
-              value="0"
-            />
-          </div>
-        </div>
-
-        <div class="checkbox-row" style="margin-top:0.3rem;">
+        <div class="checkbox-row" style="margin-top:0.5rem;">
           <input
             id="closet_needs_materials"
             name="closet_needs_materials"
@@ -372,24 +407,35 @@
           </label>
         </div>
 
-        <p class="hint" style="margin-top:0.3rem;">
-          Shelf counts help with the estimate and scheduling; we’ll confirm details
-          before buying any materials.
-        </p>
+        <div class="field-group" style="margin-top:0.5rem;">
+          <label for="closet_remove_count">
+            How many existing closet shelves are being removed?
+            <span style="font-weight:400;">
+              (This includes items being relocated or replaced)
+            </span>
+          </label>
+          <input
+            id="closet_remove_count"
+            name="closet_remove_count"
+            type="number"
+            min="0"
+            value="0"
+          />
+        </div>
       </div>
     </section>
 
     <!-- Curtains / Blinds / Decor -->
-    <section>
-      <h2 class="section-title">Curtains / Blinds / Decor (optional)</h2>
+    <section id="section-curtains" data-service-key="decor" class="service-section">
+      <h2 class="section-title">Curtains / Blinds / Decor</h2>
       <h3 class="section-subtitle">
-        Starts at about $60 total, with pricing based on the number of windows or
-        decor pieces.
+        This covers installing curtains, blinds, and decor to complete your space
+        (with a $60 minimum when this service is included).
       </h3>
       <div class="card">
         <div class="field-group">
           <label for="decor_count">
-            Number of curtain panels / blinds / decor items
+            How many curtains, blinds, or decor pieces are being installed?
           </label>
           <input
             id="decor_count"
@@ -399,9 +445,42 @@
             value="0"
           />
         </div>
-        <p class="hint" style="margin-top:0.3rem;">
-          This helps plan time for measuring, drilling, leveling, and cleanup.
-        </p>
+
+        <div class="field-group" style="margin-top:0.5rem;">
+          <label for="decor_remove_count">
+            How many curtains or blinds are being removed?
+            <span style="font-weight:400;">
+              (This includes items being relocated or replaced)
+            </span>
+          </label>
+          <input
+            id="decor_remove_count"
+            name="decor_remove_count"
+            type="number"
+            min="0"
+            value="0"
+          />
+        </div>
+      </div>
+    </section>
+
+    <!-- Job Details -->
+    <section>
+      <h2 class="section-title">Job Details</h2>
+      <div class="card">
+        <div class="checkbox-row">
+          <input id="ladder_required" name="ladder_required" type="checkbox" value="true" />
+          <label for="ladder_required">Ladder required?</label>
+        </div>
+        <div class="field-group" style="margin-top:0.5rem;">
+          <label for="parking_notes">Parking / building access notes (optional)</label>
+          <textarea
+            id="parking_notes"
+            name="parking_notes"
+            rows="2"
+            placeholder="Gate codes, parking garages, loading docks, concierge, etc."
+          ></textarea>
+        </div>
       </div>
     </section>
 
@@ -423,9 +502,8 @@
             </label>
           </div>
         </div>
-        <p class="hint" style="margin-top:0.3rem;">
-          After-hours pricing is applied on the booking side only, so this estimate
-          focuses on the work itself.
+        <p class="hint" style="margin-top:0.25rem;">
+          Final scheduling and any after-hours pricing adjustments are confirmed at booking.
         </p>
       </div>
     </section>
@@ -434,23 +512,124 @@
   </form>
 
   <script>
-    // Show/hide large-art count
-    const pictureHasLarge = document.getElementById("picture_has_large");
-    const pictureLargeSection = document.getElementById("picture_large_section");
+    // ---- Dynamic primary vs optional services ----
 
-    function syncLargeArt() {
-      if (!pictureLargeSection) return;
-      if (pictureHasLarge && pictureHasLarge.checked) {
-        pictureLargeSection.style.display = "grid";
-      } else {
-        pictureLargeSection.style.display = "none";
+    const serviceSelect = document.getElementById("service");
+    const primaryDetailsContainer = document.getElementById("primary-service-details");
+    const optionalCheckboxesContainer = document.getElementById("optional-service-checkboxes");
+    const optionalDetailsContainer = document.getElementById("optional-service-details");
+
+    const serviceSections = {
+      tv_mounting: document.getElementById("section-tv"),
+      picture_hanging: document.getElementById("section-pictures"),
+      floating_shelves: document.getElementById("section-shelves"),
+      closet_shelving: document.getElementById("section-closet"),
+      decor: document.getElementById("section-curtains"),
+    };
+
+    const serviceLabels = {
+      tv_mounting: "TV Mounting",
+      picture_hanging: "Picture & Art Hanging",
+      floating_shelves: "Floating Shelves",
+      closet_shelving: "Closet Shelving / Organizers",
+      decor: "Curtains / Blinds / Decor",
+    };
+
+    // Keep track of which optional services are currently selected
+    const selectedOptionals = new Set();
+
+    function updateServiceLayout() {
+      const primary = serviceSelect.value || "tv_mounting";
+
+      // Move primary section to the primary container
+      primaryDetailsContainer.innerHTML = "";
+      const primarySection = serviceSections[primary];
+      if (primarySection) {
+        primaryDetailsContainer.appendChild(primarySection);
+        primarySection.style.display = "block";
+      }
+
+      // Ensure primary is not in optional set
+      selectedOptionals.delete(primary);
+
+      // Rebuild optional service checkboxes
+      renderOptionalCheckboxes(primary);
+
+      // Move remaining sections to optional container and show/hide accordingly
+      optionalDetailsContainer.innerHTML = "";
+      Object.entries(serviceSections).forEach(([key, section]) => {
+        if (!section) return;
+        if (key === primary) return;
+
+        optionalDetailsContainer.appendChild(section);
+        const isSelected = selectedOptionals.has(key);
+        section.style.display = isSelected ? "block" : "none";
+      });
+
+      syncServiceFlags(primary);
+    }
+
+    function renderOptionalCheckboxes(primary) {
+      optionalCheckboxesContainer.innerHTML = "";
+
+      Object.entries(serviceSections).forEach(([key, section]) => {
+        if (!section || key === primary) return;
+
+        const row = document.createElement("div");
+        row.className = "checkbox-row";
+
+        const id = `optional_${key}`;
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.id = id;
+        input.dataset.serviceKey = key;
+        input.value = "true";
+        if (selectedOptionals.has(key)) {
+          input.checked = true;
+        }
+
+        input.addEventListener("change", () => {
+          if (input.checked) {
+            selectedOptionals.add(key);
+          } else {
+            selectedOptionals.delete(key);
+          }
+          const section = serviceSections[key];
+          if (section) {
+            section.style.display = input.checked ? "block" : "none";
+          }
+          syncServiceFlags(serviceSelect.value);
+        });
+
+        const label = document.createElement("label");
+        label.htmlFor = id;
+        label.textContent = serviceLabels[key];
+
+        row.appendChild(input);
+        row.appendChild(label);
+        optionalCheckboxesContainer.appendChild(row);
+      });
+    }
+
+    // Keep backend boolean flags (shelves, closet_shelving) in sync
+    function syncServiceFlags(primary) {
+      const activeKeys = new Set(selectedOptionals);
+      activeKeys.add(primary);
+
+      const shelvesHidden = document.getElementById("shelves_flag");
+      if (shelvesHidden) {
+        shelvesHidden.value = activeKeys.has("floating_shelves") ? "true" : "false";
+      }
+
+      const closetHidden = document.getElementById("closet_flag");
+      if (closetHidden) {
+        closetHidden.value = activeKeys.has("closet_shelving") ? "true" : "false";
       }
     }
 
-    if (pictureHasLarge) {
-      pictureHasLarge.addEventListener("change", syncLargeArt);
-      syncLargeArt();
-    }
+    // Initialize layout on load
+    updateServiceLayout();
+    serviceSelect.addEventListener("change", updateServiceLayout);
   </script>
 </body>
 </html>

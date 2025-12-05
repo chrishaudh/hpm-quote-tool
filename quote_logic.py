@@ -26,9 +26,9 @@ def determine_tax_rate(zip_code: str) -> float:
     return TAX_CONFIG.default_rate
 
 
-# -----------------------------
-# TV mounting helpers
-# -----------------------------
+# =========================
+# TV MOUNTING PRICING
+# =========================
 def price_tv_mounting(tv_size: int) -> float:
     """
     Base TV mounting pricing (no wall-type or add-ons yet):
@@ -97,223 +97,485 @@ def price_tv_addons(base_price: float, soundbar: bool, led: bool) -> float:
     return total
 
 
-# -----------------------------
-# Picture & Art Hanging
-# -----------------------------
-def price_picture_hanging(picture_count: int, picture_large_count: int = 0) -> float:
+def price_tv_removal(tv_remove_count: int) -> float:
     """
-    Picture & Art Hanging pricing:
+    TV removal pricing:
+    - $5 per TV removed (or relocated/replaced).
+    """
+    count = max(0, int(tv_remove_count))
+    return 5.0 * count
 
-    Base tiers (with a $30 minimum):
-    - 1–2 items:  $30
-    - 3–5 items:  $60
-    - 6–8 items:  $90
-    - >8 items:   90 + $30 for every additional group of 3
 
-    Large pieces (>5 ft wide):
-    - +$10 per 2 large pieces (rounded up)
+# =========================
+# PICTURE & ART HANGING
+# =========================
+def price_picture_hanging_base(picture_count: int) -> float:
+    """
+    Picture & Art Hanging pricing (base):
+
+    - 1–2 items: $30
+    - 3–5 items: $60
+    - 6–8 items: $90
+    - Every 3 items after 2 increases by $30.
+
+    Logic:
+      remaining_after_two = max(0, count - 2)
+      groups_after_two = ceil(remaining_after_two / 3)
+      price = 30 * (1 + groups_after_two)
     """
     count = max(0, int(picture_count))
 
     if count == 0:
         return 0.0
 
-    # Base tiers
     if count <= 2:
-        base = 30.0
-    elif count <= 5:
-        base = 60.0
-    elif count <= 8:
-        base = 90.0
-    else:
-        extra_pieces = count - 8
-        extra_groups = (extra_pieces + 2) // 3  # groups of 3
-        base = 90.0 + 30.0 * extra_groups
+        return 30.0
 
-    # Large-piece surcharge
-    large = max(0, int(picture_large_count))
-    if large > 0:
-        large_groups = (large + 1) // 2  # every 2 large pieces
-        base += 10.0 * large_groups
-
-    return base
+    remaining = count - 2
+    groups_after_two = (remaining + 2) // 3  # ceiling(remaining / 3)
+    return 30.0 * (1 + groups_after_two)
 
 
-# -----------------------------
-# Floating Shelves
-# -----------------------------
-def price_floating_shelves(
-    shelves_install_count: int, shelves_remove_count: int
-) -> float:
+def price_large_picture_addon(picture_large_count: int) -> float:
     """
-    Floating Shelves pricing:
+    Additional pricing for large pieces (>= 5 ft wide):
 
-    Install:
-      Every 2 shelves = $60
-      e.g. 1–2 = 60, 3–4 = 120, 5–6 = 180, etc.
-
-    Removal:
-      $5 per removed shelf
+    - 1–2 large pieces: +$10
+    - 3–4 large pieces: +$20
+    - etc. → $10 per pair
     """
-    install = max(0, int(shelves_install_count))
-    remove = max(0, int(shelves_remove_count))
+    count = max(0, int(picture_large_count))
+    if count == 0:
+        return 0.0
 
-    if install > 0:
-        groups = (install + 1) // 2  # ceil(install / 2)
-        install_total = 60.0 * groups
-    else:
-        install_total = 0.0
-
-    removal_total = 5.0 * remove
-
-    return install_total + removal_total
+    pairs = (count + 1) // 2  # ceiling(count / 2)
+    return 10.0 * pairs
 
 
-# -----------------------------
-# Closet Shelving / Organizers
-# -----------------------------
-def price_closet_shelving(
-    closet_install_count: int,
-    closet_remove_count: int,
-) -> float:
+# =========================
+# FLOATING SHELVES
+# =========================
+def price_floating_shelves_by_count(shelves_count: int) -> float:
     """
-    Closet Shelving pricing:
+    Floating shelves pricing (install):
 
-    Install:
-      1 shelf = $60
-      2 shelves = $90
-      3 shelves = $120
-      Each additional shelf after 2 adds $30
+    - 1–2 shelves: $60
+    - 3–4 shelves: $120
+    - 5–6 shelves: $180
+    - etc.
 
-    Removal:
-      $10 per removed shelf
+    Rule: every 2 shelves is an additional $60.
     """
-    install = max(0, int(closet_install_count))
-    remove = max(0, int(closet_remove_count))
+    count = max(0, int(shelves_count))
+    if count == 0:
+        return 0.0
 
-    if install > 0:
-        # 1 shelf: 60; 2: 90; 3: 120; etc.
-        install_total = 60.0 + max(0, install - 1) * 30.0
-    else:
-        install_total = 0.0
-
-    removal_total = 10.0 * remove
-
-    return install_total + removal_total
+    blocks = (count + 1) // 2  # ceiling(count / 2)
+    return 60.0 * blocks
 
 
-# -----------------------------
-# Curtains / Blinds / Decor
-# -----------------------------
-def price_decor(decor_count: int) -> float:
+def price_shelf_removal(shelves_remove_count: int) -> float:
     """
-    Curtains / Blinds / Decor pricing:
+    Floating shelf removal pricing:
+    - $5 per shelf removed (or relocated/replaced).
+    """
+    count = max(0, int(shelves_remove_count))
+    return 5.0 * count
 
-    - $15 per piece
-    - $60 minimum once any items are included
+
+# =========================
+# CLOSET SHELVING / ORGANIZERS
+# =========================
+def price_closet_shelving_by_count(closet_shelf_count: int) -> float:
+    """
+    Closet shelving pricing (install):
+
+    - 1 shelf: $60
+    - 2 shelves: $90
+    - 3 shelves: $120
+    - Each additional shelf after 2 adds $30.
+    """
+    count = max(0, int(closet_shelf_count))
+    if count == 0:
+        return 0.0
+    if count == 1:
+        return 60.0
+    return 90.0 + max(0, count - 2) * 30.0
+
+
+def price_closet_removal(closet_remove_count: int) -> float:
+    """
+    Closet shelf removal pricing:
+    - $10 per shelf removed (or relocated/replaced).
+    """
+    count = max(0, int(closet_remove_count))
+    return 10.0 * count
+
+
+# =========================
+# CURTAINS / BLINDS / DECOR
+# =========================
+def price_decor_install(decor_count: int) -> float:
+    """
+    Decor / Curtains / Blinds installation:
+
+    - $15 per piece (curtain/blind/decor).
     """
     count = max(0, int(decor_count))
     if count == 0:
         return 0.0
-
-    base = 15.0 * count
-    return max(60.0, base)
+    return 15.0 * count
 
 
-# -----------------------------
-# Main quote calculator
-# -----------------------------
+def price_decor_removal(decor_remove_count: int) -> float:
+    """
+    Curtains / blinds removal pricing:
+    - $10 per item removed (or relocated/replaced).
+    """
+    count = max(0, int(decor_remove_count))
+    return 10.0 * count
+
+
+# =========================
+# TIME ESTIMATE (for quote)
+# =========================
+def estimate_hours(
+    tv_count: int,
+    tv_remove_count: int,
+    shelves_count: int,
+    shelves_remove_count: int,
+    picture_count: int,
+    picture_large_count: int,
+    closet_shelf_count: int,
+    closet_remove_count: int,
+    decor_count: int,
+    decor_remove_count: int,
+) -> float:
+    """
+    Rough estimate of on-site time in hours, based on your rules & typical pace.
+
+    This does NOT change the booking calendar yet; it's for the quote display
+    (and can later be wired into booking duration logic).
+    """
+    h = 0.0
+
+    # TVs: ~1 hr per TV, 15 min per removal
+    h += max(0, int(tv_count)) * 1.0
+    h += max(0, int(tv_remove_count)) * 0.25
+
+    # Floating shelves: ~2 hours for 3 shelves ≈ 0.66 hr each
+    h += max(0, int(shelves_count)) * (2.0 / 3.0)
+    h += max(0, int(shelves_remove_count)) * 0.25
+
+    # Pictures: ~9–10 minutes each, bump for large pieces
+    h += max(0, int(picture_count)) * 0.15
+    h += max(0, int(picture_large_count)) * 0.1
+
+    # Closet shelving: ~30 minutes each, 15 min per removal
+    h += max(0, int(closet_shelf_count)) * 0.5
+    h += max(0, int(closet_remove_count)) * 0.25
+
+    # Curtains / decor: ~9–10 minutes each, same for removals
+    h += max(0, int(decor_count)) * 0.15
+    h += max(0, int(decor_remove_count)) * 0.15
+
+    # Setup / walkthrough buffer
+    h += 0.25
+
+    # Clamp between 1.5 and 8 hours
+    if h < 1.5:
+        h = 1.5
+    if h > 8:
+        h = 8.0
+
+    return round(h, 1)
+
+
+# =========================
+# MAIN QUOTE CALCULATION
+# =========================
+import math
+def estimate_tv_hours(tv_count: int, tv_remove_count: int) -> float:
+    """
+    TVs
+    - Mounting: 1 hour per TV
+    - Removal:  15 minutes (0.25 hour) per TV
+    """
+    tv_count = max(0, int(tv_count))
+    tv_remove_count = max(0, int(tv_remove_count))
+
+    mount_hours = tv_count * 1.0
+    remove_hours = tv_remove_count * 0.25
+
+    return mount_hours + remove_hours
+
+
+def estimate_picture_hours(picture_count: int) -> float:
+    """
+    Art / Pictures:
+    - Every 3 items takes 30 minutes (0.5h)
+    - BUT minimum booking slot is 1 hour:
+      * 1–3  items -> 0.5h work, but book 1.0h
+      * 4–6  items -> 1.0h
+      * 7–9  items -> 1.5h
+      * and so on
+    """
+    count = max(0, int(picture_count))
+    if count == 0:
+        return 0.0
+
+    groups_of_three = math.ceil(count / 3.0)
+    raw_hours = 0.5 * groups_of_three
+    return max(1.0, raw_hours)
+
+
+def estimate_shelf_hours(shelves_count: int, shelves_remove_count: int) -> float:
+    """
+    Floating Shelves:
+    - Every 2 items takes 30 minutes (0.5h)
+    - Minimum booking slot is 1 hour
+      * 1–2  shelves -> 0.5h work, but book 1.0h
+      * 3–4  shelves -> 1.0h
+      * 5–6  shelves -> 1.5h
+    - Removal: 15 minutes (0.25h) per shelf
+    """
+    shelves_count = max(0, int(shelves_count))
+    shelves_remove_count = max(0, int(shelves_remove_count))
+
+    if shelves_count > 0:
+        groups_of_two = math.ceil(shelves_count / 2.0)
+        raw_install_hours = 0.5 * groups_of_two
+        install_hours = max(1.0, raw_install_hours)
+    else:
+        install_hours = 0.0
+
+    remove_hours = shelves_remove_count * 0.25
+
+    return install_hours + remove_hours
+
+
+def estimate_closet_hours(closet_shelf_count: int, closet_remove_count: int) -> float:
+    """
+    Closet Shelving:
+    - 30 minutes (0.5h) per shelf
+    - Minimum booking slot is 1 hour
+      * 1 shelf  -> 0.5h work, book 1.0h
+      * 2 shelves -> 1.0h
+      * 3 shelves -> 1.5h
+    - Removal: 20 minutes (1/3h) per shelf
+    """
+    closet_shelf_count = max(0, int(closet_shelf_count))
+    closet_remove_count = max(0, int(closet_remove_count))
+
+    if closet_shelf_count > 0:
+        install_hours = max(1.0, 0.5 * closet_shelf_count)
+    else:
+        install_hours = 0.0
+
+    remove_hours = closet_remove_count * (1.0 / 3.0)  # ~0.33h each
+
+    return install_hours + remove_hours
+
+
+def estimate_curtains_hours(decor_count: int, decor_remove_count: int) -> float:
+    """
+    Curtains / Blinds / Decor:
+    - 30 minutes (0.5h) per item
+    - Minimum booking slot is 1 hour
+      * 1 item  -> 0.5h work, book 1.0h
+      * 2 items -> 1.0h
+    - Removal: 20 minutes (1/3h) per item
+    """
+    decor_count = max(0, int(decor_count))
+    decor_remove_count = max(0, int(decor_remove_count))
+
+    if decor_count > 0:
+        install_hours = max(1.0, 0.5 * decor_count)
+    else:
+        install_hours = 0.0
+
+    remove_hours = decor_remove_count * (1.0 / 3.0)
+
+    return install_hours + remove_hours
+
 def calculate_quote(
     *,
     service: str,
     tv_size: int,
+    tv_count: int,
     wall_type: str,
     conceal_type: str,
     soundbar: bool,
     shelves: bool,
     picture_count: int,
-    picture_large_count: int = 0,
-    gallery_wall: bool = False,
-    led: bool = False,
-    same_day: bool = False,
-    after_hours: bool = False,
+    led: bool,
+    same_day: bool,
+    after_hours: bool,
     zip_code: str,
     closet_shelving: bool = False,
     closet_needs_materials: bool = False,
     decor_count: int = 0,
-    shelves_install_count: int = 0,
-    shelves_remove_count: int = 0,
-    closet_install_count: int = 0,
-    closet_remove_count: int = 0,
+    shelves_count: int = 0,
+    closet_shelf_count: int = 0,
     closet_shelf_not_sure: bool = False,
+    tv_remove_count: int = 0,
+    shelves_remove_count: int = 0,
+    closet_remove_count: int = 0,
+    decor_remove_count: int = 0,
+    picture_large_count: int = 0,
+    ladder_required: bool = False,
+    parking_notes: str = "",
+    preferred_contact: str = "",
+    gallery_wall: bool = False,
 ) -> Dict[str, Any]:
     """
     Main quote calculator.
 
-    `service` is the primary label, but pricing is built from
-    the individual components so you can mix services in one visit.
+    - Pricing uses your flat-fee per-item rules.
+    - estimated_hours uses your time assumptions per service and removal.
     """
 
-    # 1) TV Mounting
-    tv_base = price_tv_mounting(tv_size)
-    tv_with_wall = adjust_for_wall_type(tv_base, wall_type)
+    # ----------------------------
+    # 1) TV Mounting pricing
+    # ----------------------------
+    tv_count = max(0, int(tv_count))
+    tv_size_val = max(0, int(tv_size))
+
+    # per-TV base
+    if tv_size_val <= 0 or tv_count == 0:
+        base_tv_price = 0.0
+    else:
+        per_tv = 60.0 if tv_size_val < 60 else 70.0
+        base_tv_price = per_tv * tv_count
+
+    # wall type & concealment adjustments on total TV labor
+    tv_with_wall = adjust_for_wall_type(base_tv_price, wall_type)
     tv_with_concealment = adjust_for_concealment(tv_with_wall, conceal_type)
-    tv_total = price_tv_addons(tv_with_concealment, soundbar, led)
 
-    if tv_size <= 0:
-        tv_total = 0.0
+    # addons
+    tv_with_addons = price_tv_addons(tv_with_concealment, soundbar, led)
 
-    # 2) Picture & Art Hanging
-    picture_total = price_picture_hanging(picture_count, picture_large_count)
+    # TV removal pricing ($5 each, same as floating shelves)
+    tv_remove_count = max(0, int(tv_remove_count))
+    tv_remove_total = tv_remove_count * 5.0
 
-    # 3) Floating Shelves
-    if shelves:
-        shelves_total = price_floating_shelves(
-            shelves_install_count=shelves_install_count,
-            shelves_remove_count=shelves_remove_count,
-        )
+    tv_total = tv_with_addons + tv_remove_total
+
+    # ----------------------------
+    # 2) Picture & Art Hanging pricing
+    # ----------------------------
+    # New rule:
+    # - $30 minimum
+    # - 1–2 items = $30
+    # - 3–5 items = $60
+    # - 6–8 items = $90
+    # - every 3 items after 2 adds +$30
+    pic_count = max(0, int(picture_count))
+    if pic_count == 0:
+        picture_total = 0.0
     else:
-        shelves_total = 0.0
+        blocks_after_two = max(0, pic_count - 2)
+        groups_of_three = math.ceil(blocks_after_two / 3.0)
+        picture_total = 30.0 + 30.0 * groups_of_three
 
-    # 4) Closet Shelving / Organizers
-    if closet_shelving:
-        closet_total = price_closet_shelving(
-            closet_install_count=closet_install_count,
-            closet_remove_count=closet_remove_count,
-        )
+    # Large pieces (>6ft) add-ons: +$10 per pair
+    picture_large_count = max(0, int(picture_large_count))
+    if picture_large_count > 0:
+        large_pairs = math.ceil(picture_large_count / 2.0)
+        picture_large_total = 10.0 * large_pairs
     else:
-        closet_total = 0.0
+        picture_large_total = 0.0
 
-    # 5) Curtains / Blinds / Decor
-    decor_total = price_decor(decor_count)
+    picture_total += picture_large_total
 
-    # 6) Multi-service discount
-    # Count how many services actually have a charge
-    service_totals = [tv_total, picture_total, shelves_total, closet_total, decor_total]
-    num_services = sum(1 for t in service_totals if t > 0)
+    # ----------------------------
+    # 3) Floating Shelves pricing
+    # ----------------------------
+    # - Every 2 shelves is +$60
+    #   * 1–2 shelves = $60
+    #   * 3–4 shelves = $120
+    #   * 5–6 shelves = $180 ...
+    shelf_count = max(0, int(shelves_count))
+    shelves_price = 0.0
+    if shelves and shelf_count > 0:
+        shelf_blocks = math.ceil(shelf_count / 2.0)
+        shelves_price = 60.0 * shelf_blocks
+
+    # Floating shelf removal: $5 per shelf
+    shelves_remove_count = max(0, int(shelves_remove_count))
+    shelves_remove_total = shelves_remove_count * 5.0
+
+    shelves_total = shelves_price + shelves_remove_total
+
+    # ----------------------------
+    # 4) Closet shelving pricing
+    # ----------------------------
+    # Closet labor:
+    # - 1 shelf = $60
+    # - 2 shelves = $90
+    # - 3 shelves = $120
+    # - After 2 shelves, each additional shelf +$30
+    closet_shelf_count = max(0, int(closet_shelf_count))
+    closet_labor_total = 0.0
+    if closet_shelving and closet_shelf_count > 0:
+        if closet_shelf_count == 1:
+            closet_labor_total = 60.0
+        else:
+            closet_labor_total = 90.0 + max(0, closet_shelf_count - 2) * 30.0
+
+    # Closet removal: $10 per shelf
+    closet_remove_count = max(0, int(closet_remove_count))
+    closet_remove_total = closet_remove_count * 10.0
+
+    closet_total = closet_labor_total + closet_remove_total
+
+    # ----------------------------
+    # 5) Curtains / Blinds / Decor pricing
+    # ----------------------------
+    # - $60 minimum for any work (except 0)
+    # - Simple per-item component; we’ll use $20/item with $60 min
+    decor_count = max(0, int(decor_count))
+    if decor_count == 0:
+        decor_labor_total = 0.0
+    else:
+        decor_labor_total = max(60.0, 20.0 * decor_count)
+
+    # Curtains / blinds removal: $10 each
+    decor_remove_count = max(0, int(decor_remove_count))
+    decor_remove_total = decor_remove_count * 10.0
+
+    decor_total = decor_labor_total + decor_remove_total
+
+    # ----------------------------
+    # 6) Multi-service discount (15%)
+    # ----------------------------
+    # Count how many service "buckets" have >0 charges
+    service_subtotals = [
+        tv_total,
+        picture_total,
+        shelves_total,
+        closet_total,
+        decor_total,
+    ]
+    num_services = sum(1 for v in service_subtotals if v > 0)
 
     multi_service_discount = 0.0
-    if num_services >= 2:
-        base_sum = sum(t for t in service_totals if t > 0)
-        multi_service_discount = round(-0.15 * base_sum, 2)  # 15% off
+    gross_before_discount = sum(service_subtotals)
 
-    # 7) Same-day / after-hours surcharges in the quote
-    # These are handled on the booking side so we keep them at 0.0 here.
+    if num_services >= 2 and gross_before_discount > 0:
+        multi_service_discount = round(-0.15 * gross_before_discount, 2)
+
+    # ----------------------------
+    # 7) Same-day / after-hours surcharges (quote side)
+    # ----------------------------
+    # Keep these at 0.0 in the quote to avoid double-charging;
+    # they're applied on the booking side when a time is chosen.
     same_day_surcharge = 0.0
     after_hours_surcharge = 0.0
 
-    # 8) Sum everything
-    line_items = {
-        "tv_total": round(tv_total, 2),
-        "picture_total": round(picture_total, 2),
-        "shelves_total": round(shelves_total, 2),
-        "closet_total": round(closet_total, 2),
-        "decor_total": round(decor_total, 2),
-        "multi_service_discount": round(multi_service_discount, 2),
-        "same_day_surcharge": round(same_day_surcharge, 2),
-        "after_hours_surcharge": round(after_hours_surcharge, 2),
-    }
-
+    # ----------------------------
+    # 8) Subtotal + tax
+    # ----------------------------
     subtotal_before_tax = round(
         tv_total
         + picture_total
@@ -330,6 +592,41 @@ def calculate_quote(
     tax_amount = round(subtotal_before_tax * tax_rate, 2)
     estimated_total_with_tax = round(subtotal_before_tax + tax_amount, 2)
 
+    # ----------------------------
+    # 9) Estimated hours based on your timing rules
+    # ----------------------------
+    tv_hours = estimate_tv_hours(tv_count, tv_remove_count)
+    picture_hours = estimate_picture_hours(picture_count)
+    shelf_hours = estimate_shelf_hours(shelves_count, shelves_remove_count)
+    closet_hours = estimate_closet_hours(closet_shelf_count, closet_remove_count)
+    curtains_hours = estimate_curtains_hours(decor_count, decor_remove_count)
+
+    estimated_hours = tv_hours + picture_hours + shelf_hours + closet_hours + curtains_hours
+
+    # Clamp to a reasonable range
+    if estimated_hours <= 0:
+        estimated_hours = 1.0
+    estimated_hours = min(estimated_hours, 8.0)
+
+    # ----------------------------
+    # 10) Build result
+    # ----------------------------
+    line_items = {
+        "tv_total": round(tv_total, 2),
+        "tv_remove_total": round(tv_remove_total, 2),
+        "picture_total": round(picture_total, 2),
+        "picture_large_total": round(picture_large_total, 2),
+        "shelves_total": round(shelves_total, 2),
+        "shelves_remove_total": round(shelves_remove_total, 2),
+        "closet_total": round(closet_total, 2),
+        "closet_remove_total": round(closet_remove_total, 2),
+        "decor_total": round(decor_total, 2),
+        "decor_remove_total": round(decor_remove_total, 2),
+        "multi_service_discount": round(multi_service_discount, 2),
+        "same_day_surcharge": round(same_day_surcharge, 2),
+        "after_hours_surcharge": round(after_hours_surcharge, 2),
+    }
+
     return {
         "service": service,
         "line_items": line_items,
@@ -338,16 +635,25 @@ def calculate_quote(
         "tax_amount": tax_amount,
         "estimated_total_with_tax": estimated_total_with_tax,
         "num_services": num_services,
-        # extra context surfaced on the result page
+        "estimated_hours": round(estimated_hours, 2),
+
+        # extra context surfaced on the result / booking side
         "closet_needs_materials": closet_needs_materials,
         "decor_count": decor_count,
-        "picture_count": picture_count,
+        "picture_count": pic_count,
         "picture_large_count": picture_large_count,
-        "gallery_wall": gallery_wall,
-        "tv_size": tv_size,
-        "shelves_install_count": shelves_install_count,
+        "tv_size": tv_size_val,
+        "tv_count": tv_count,
+        "tv_remove_count": tv_remove_count,
+        "shelves_count": shelf_count,
         "shelves_remove_count": shelves_remove_count,
-        "closet_install_count": closet_install_count,
-        "closet_remove_count": closet_remove_count,
+        "closet_shelf_count": closet_shelf_count,
         "closet_shelf_not_sure": closet_shelf_not_sure,
+        "closet_remove_count": closet_remove_count,
+        "decor_remove_count": decor_remove_count,
+        "ladder_required": ladder_required,
+        "parking_notes": parking_notes,
+        "preferred_contact": preferred_contact,
+        "gallery_wall": gallery_wall,
     }
+
