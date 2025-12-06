@@ -134,40 +134,41 @@
       </p>
     </div>
 
-    <!-- Services this visit (read-only summary + hidden flags) -->
-    <div class="card">
-      <label style="font-weight:600; margin-bottom:0.25rem;">
-        Services included in this visit
-      </label>
-      <ul class="service-list">
-        {% if booking.has_tv %}
-          <li>TV Mounting</li>
-        {% endif %}
-        {% if booking.has_pictures %}
-          <li>Picture &amp; Art Hanging</li>
-        {% endif %}
-        {% if booking.has_shelves %}
-          <li>Floating Shelves</li>
-        {% endif %}
-        {% if booking.has_closet %}
-          <li>Closet Shelving / Organizers</li>
-        {% endif %}
-        {% if booking.has_decor %}
-          <li>Curtains / Blinds / Decor</li>
-        {% endif %}
-        {% if not (booking.has_tv or booking.has_pictures or booking.has_shelves or booking.has_closet or booking.has_decor) %}
-          <li>Details will be confirmed at time of booking.</li>
-        {% endif %}
-      </ul>
+<!-- Services included in this visit (from quote) -->
+<div class="card">
+  <label style="font-weight:600; margin-bottom:0.25rem;">
+    Services included in this visit
+  </label>
 
-      <!-- Hidden fields so backend still knows what to schedule -->
-      <input type="hidden" name="service_type" value="{{ prefilled.service_type or 'TV Mounting' }}" />
-      <input type="hidden" name="include_tv" value="{{ 'true' if booking.has_tv else 'false' }}" />
-      <input type="hidden" name="include_pictures" value="{{ 'true' if booking.has_pictures else 'false' }}" />
-      <input type="hidden" name="include_shelves" value="{{ 'true' if booking.has_shelves else 'false' }}" />
-      <input type="hidden" name="include_closet" value="{{ 'true' if booking.has_closet else 'false' }}" />
-      <input type="hidden" name="include_decor" value="{{ 'true' if booking.has_decor else 'false' }}" />
-    </div>
+  {% if services_this_visit %}
+    <ul class="service-list">
+      {% for svc in services_this_visit %}
+        <li>{{ svc }}</li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="hint">Details will be confirmed at time of booking.</p>
+  {% endif %}
+
+  <!-- Hidden fields (needed by /book POST) -->
+  <input
+    type="hidden"
+    name="services_this_visit_raw"
+    value="{{ ', '.join(services_this_visit) if services_this_visit else '' }}"
+  />
+  <input
+    type="hidden"
+    name="num_services"
+    value="{{ num_services }}"
+  />
+
+  <!-- Primary service (still required by backend) -->
+  <input
+    type="hidden"
+    name="service_type"
+    value="{{ prefilled.service_type or 'TV Mounting' }}"
+  />
+</div>
 
     <!-- Date & time -->
     <div class="two-col">

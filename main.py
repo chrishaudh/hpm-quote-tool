@@ -1,6 +1,7 @@
 from typing import Optional
 from datetime import datetime, date, timedelta
 import re
+import urllib.parse
 
 import requests
 import pytz
@@ -187,15 +188,32 @@ async def show_booking_form(
     email: Optional[str] = Query(None),
     phone: Optional[str] = Query(None),
     hours: Optional[float] = Query(None),
-):
-    """
-    Render the booking form.
 
-    - service_type, name, email, phone, hours are normally passed from the quote's
-      "Book This Install" button as query params.
-    - booking is a simple dict so booking_form.html can safely do things like
-      {% if booking.has_tv %} without blowing up on first load.
-    """
+    # service flags from booking_url
+    tv: Optional[str] = Query(None),
+    pictures: Optional[str] = Query(None),
+    shelves: Optional[str] = Query(None),
+    closet: Optional[str] = Query(None),
+    decor: Optional[str] = Query(None),
+
+    num_services: Optional[int] = Query(None),
+):
+    def flag(value: Optional[str]) -> bool:
+        return str(value).lower() == "true"
+
+    # Build a clean list of service names for this visit
+    service_flags = {
+        "TV Mounting": flag(tv),
+        "Picture & Art Hanging": flag(pictures),
+        "Floating Shelves": flag(shelves),
+        "Closet Shelving": flag(closet),
+        "Curtains & Blinds": flag(decor),
+    }
+    services_this_visit = [svc for svc, enabled in service_flags.items() if enabled]
+    if num_services is None:
+        num_services_val = len(services_this_visit) or 1
+    else:
+        num_services_val = num_services
 
     prefilled = {
         "service_type": service_type,
@@ -209,27 +227,6 @@ async def show_booking_form(
         "estimated_hours": hours,
     }
 
-    # Default booking context – safe for template to read
-    booking = {
-        "has_tv": False,
-        "tv_count": 0,
-        "tv_remove_count": 0,
-        "picture_count": 0,
-        "picture_large_flag": False,
-        "picture_large_count": 0,
-        "gallery_wall": False,
-        "has_shelves": False,
-        "shelves_count": 0,
-        "shelves_remove_count": 0,
-        "closet_shelving": False,
-        "closet_shelf_count": 0,
-        "closet_remove_count": 0,
-        "curtains_count": 0,
-        "curtains_remove_count": 0,
-        "ladder_required": False,
-        "estimated_hours": hours,
-    }
-
     return templates.TemplateResponse(
         "booking_form.html",
         {
@@ -237,11 +234,14 @@ async def show_booking_form(
             "service_types": SERVICE_TYPES,
             "prefilled": prefilled,
             "errors": {},
-            "booking": booking,
+            "services_this_visit": services_this_visit,
+            "num_services": num_services_val,
         },
     )
 
-
+# =====================================================
+# BOOKING FORM (POST)
+# =====================================================
 # =====================================================
 # BOOKING FORM (POST)
 # =====================================================
@@ -249,21 +249,20 @@ async def show_booking_form(
 async def submit_booking(
     request: Request,
     background_tasks: BackgroundTasks,
+
+    # Primary service (read-only in the form, but still posted as a hidden field)
     service_type: str = Form(...),
 
     # New style: ISO datetime string from availability dropdown
     time_slot: Optional[str] = Form(None),
 
-    # Legacy style (kept just in case)
+    # Legacy style (kept just in case, if no time_slot)
     appointment_date: Optional[str] = Form(None),
     appointment_time: Optional[str] = Form(None),
 
-    # Multi-service selections for this visit (may or may not be present in form)
-    include_tv: str = Form("false"),
-    include_pictures: str = Form("false"),
-    include_shelves: str = Form("false"),
-    include_closet: str = Form("false"),
-    include_decor: str = Form("false"),
+    # NEW: services for this visit, passed from booking_form.html
+    services_this_visit_raw: str = Form(""),
+    num_services: Optional[int] = Form(None),
 
     # Customer info
     name: str = Form(...),
@@ -282,9 +281,6 @@ async def submit_booking(
     notes: str = Form(""),
 ):
     tz = pytz.timezone(TIMEZONE)
-
-    def to_bool(value: str) -> bool:
-        return str(value).lower() == "true"
 
     # 0) Validate address
     is_valid_address, parsed_address, addr_error = validate_address(
@@ -314,15 +310,22 @@ async def submit_booking(
                 "service_types": SERVICE_TYPES,
                 "prefilled": prefilled,
                 "errors": errors,
+                "services_this_visit": [],
+                "num_services": 1,
             },
             status_code=400,
         )
 
     # Build full address string
-    full_address = f"{parsed_address['street']}, {parsed_address['city']}, {parsed_address['state']} {parsed_address['zip']}"
+    full_address = (
+        f"{parsed_address['street']}, "
+        f"{parsed_address['city']}, "
+        f"{parsed_address['state']} {parsed_address['zip']}"
+    )
 
     # 1) Determine start datetime
     if time_slot:
+        # time_slot is an ISO string from the availability dropdown
         try:
             start_dt = datetime.fromisoformat(time_slot)
         except ValueError:
@@ -335,6 +338,7 @@ async def submit_booking(
                 status_code=400,
             )
     else:
+        # Fallback to separate date / time fields if needed
         if not appointment_date or not appointment_time:
             return templates.TemplateResponse(
                 "booking_error.html",
@@ -356,39 +360,43 @@ async def submit_booking(
                 status_code=400,
             )
 
+    # Normalize timezone
     if start_dt.tzinfo is None:
         start_dt = tz.localize(start_dt)
     else:
         start_dt = start_dt.astimezone(tz)
 
-    # 1b) Multi-service flags (fallback if we ever need them)
-    include_tv_bool = to_bool(include_tv)
-    include_pictures_bool = to_bool(include_pictures)
-    include_shelves_bool = to_bool(include_shelves)
-    include_closet_bool = to_bool(include_closet)
-    include_decor_bool = to_bool(include_decor)
+    # 2) Parse services list from hidden field
+    if services_this_visit_raw:
+        services_this_visit = [
+            s.strip()
+            for s in services_this_visit_raw.split(",")
+            if s.strip()
+        ]
+    else:
+        services_this_visit = []
 
-    # 2) Duration: prefer estimated_hours from quote, fall back to rough logic
+    if num_services is not None and num_services > 0:
+        effective_num_services = int(num_services)
+    else:
+        effective_num_services = len(services_this_visit) or 1
+
+    # 3) Duration: prefer estimated_hours from quote, fallback to 2 hours
     if estimated_hours is not None and estimated_hours > 0:
         duration_hours = float(estimated_hours)
     else:
-        duration_hours = compute_booking_duration_hours(
-            include_tv_bool,
-            include_pictures_bool,
-            include_shelves_bool,
-            include_closet_bool,
-            include_decor_bool,
-        )
+        duration_hours = 2.0  # basic fallback
 
     end_dt = start_dt + timedelta(hours=duration_hours)
 
-    # 2b) Same-day / after-hours flags
+    # 4) Same-day / after-hours flags (for internal tracking / Zap)
     now_local = datetime.now(tz)
     is_same_day_booking = (start_dt.date() == now_local.date())
     is_after_hours_booking = start_dt.hour >= AFTER_HOURS_START_HOUR
 
-    # 3) Build calendar event details
+    # 5) Build calendar event details
     summary = f"{service_type} - {name}"
+
     description_lines = [
         f"Service (primary): {service_type}",
         f"Customer: {name}",
@@ -396,34 +404,21 @@ async def submit_booking(
         f"Phone: {phone}",
         f"Address: {full_address}",
     ]
-    if notes:
-        description_lines.append(f"Notes: {notes}")
-
-    services_this_visit = []
-    if include_tv_bool:
-        services_this_visit.append("TV Mounting")
-    if include_pictures_bool:
-        services_this_visit.append("Picture & Art Hanging")
-    if include_shelves_bool:
-        services_this_visit.append("Floating Shelves")
-    if include_closet_bool:
-        services_this_visit.append("Closet Shelving / Organizers")
-    if include_decor_bool:
-        services_this_visit.append("Curtains & Blinds / Decor")
-
-    num_services = len(services_this_visit) if services_this_visit else 1
 
     if services_this_visit:
         description_lines.append("Services this visit: " + ", ".join(services_this_visit))
 
-    description_lines.append(f"Number of services: {num_services}")
+    description_lines.append(f"Number of services: {effective_num_services}")
     description_lines.append(f"Expected duration: {duration_hours:.1f} hours")
     description_lines.append(f"Same-day booking: {'YES' if is_same_day_booking else 'NO'}")
     description_lines.append(f"After-hours booking: {'YES' if is_after_hours_booking else 'NO'}")
 
+    if notes:
+        description_lines.append(f"Notes: {notes}")
+
     description = "\n".join(description_lines)
 
-    # 4) Create the calendar event
+    # 6) Create the calendar event
     create_booking_event(
         summary=summary,
         description=description,
@@ -433,7 +428,7 @@ async def submit_booking(
         calendar_id=CALENDAR_ID,
     )
 
-    # 5) Trigger email confirmation via Zapier (booking Zap)
+    # 7) Trigger booking Zap with full service list + duration
     background_tasks.add_task(
         send_booking_to_zapier,
         name,
@@ -447,10 +442,10 @@ async def submit_booking(
         parsed_address,
         services_this_visit,
         duration_hours,
-        num_services,
+        effective_num_services,
     )
 
-    # 6) Show confirmation page
+    # 8) Show confirmation page
     return templates.TemplateResponse(
         "booking_confirm.html",
         {
@@ -461,11 +456,19 @@ async def submit_booking(
             "end": end_dt,
             "address": full_address,
             "services_this_visit": services_this_visit,
-            "num_services": num_services,
+            "num_services": effective_num_services,
             "duration_hours": duration_hours,
+
+            # Extra fields your template references (safe defaults)
+            "tv_size": None,
+            "picture_count": None,
+            "shelves_count": None,
+            "closet_shelf_count": None,
+            "decor_count": None,
+            "contact_pref": "email",
+            "ladder_required": False,
         },
     )
-
 
 # =====================================================
 # Pydantic model for JSON quote requests
@@ -514,6 +517,9 @@ class QuoteRequest(BaseModel):
 # =====================================================
 # Zapier sending helper for QUOTES
 # =====================================================
+# =====================================================
+# Zapier sending helper for QUOTES
+# =====================================================
 def send_lead_to_zapier(
     contact_name: Optional[str],
     contact_phone: Optional[str],
@@ -529,14 +535,67 @@ def send_lead_to_zapier(
     booking_url: str,
     quote_result: dict,
 ) -> None:
+    """
+    Send full quote details to Zapier (Zap A).
+    This now includes:
+      - per-service counts
+      - removal counts
+      - ladder / gallery flags
+      - estimated_hours from the quote
+      - line-item dollar amounts
+    """
     if not ZAPIER_WEBHOOK_URL:
         print("ZAPIER_WEBHOOK_URL is empty; skipping Zapier send")
         return
 
     try:
-        line_items = quote_result.get("line_items", {}) or {}
+        line_items = (quote_result.get("line_items") or {}) if isinstance(quote_result, dict) else {}
+
+        # High-level counts & flags from quote_result (all .get() so it won't crash if missing)
+        tv_count = quote_result.get("tv_count", 0)
+        tv_remove_count = quote_result.get("tv_remove_count", 0)
+
+        picture_count_total = quote_result.get("picture_count", 0)
+        picture_large_count = quote_result.get("picture_large_count", 0)
+        gallery_wall = quote_result.get("gallery_wall", False)
+
+        shelves_count = quote_result.get("shelves_count", 0)
+        shelves_remove_count = quote_result.get("shelves_remove_count", 0)
+
+        closet_shelf_count = quote_result.get("closet_shelf_count", 0)
+        closet_shelf_remove_count = quote_result.get("closet_shelf_remove_count", 0)
+
+        curtains_count = quote_result.get("curtains_count", 0)
+        curtains_remove_count = quote_result.get("curtains_remove_count", 0)
+
+        ladder_required = quote_result.get("ladder_required", False)
+
+        estimated_hours = quote_result.get("estimated_hours", 0.0)
+
+        # Core money fields
+        subtotal_before_tax = quote_result.get("subtotal_before_tax", 0.0)
+        tax_rate = quote_result.get("tax_rate", 0.0)
+        tax_amount = quote_result.get("tax_amount", 0.0)
+        estimated_total_with_tax = quote_result.get("estimated_total_with_tax", 0.0)
+
+        tv_total = line_items.get("tv_total", 0.0)
+        tv_remove_total = line_items.get("tv_remove_total", 0.0)
+        picture_total = line_items.get("picture_total", 0.0)
+        picture_large_total = line_items.get("picture_large_total", 0.0)
+        shelves_total = line_items.get("shelves_total", 0.0)
+        shelves_remove_total = line_items.get("shelves_remove_total", 0.0)
+        closet_total = line_items.get("closet_total", 0.0)
+        closet_remove_total = line_items.get("closet_remove_total", 0.0)
+        curtains_total = line_items.get("curtains_total", 0.0)
+        curtains_remove_total = line_items.get("curtains_remove_total", 0.0)
+        addons = line_items.get("addons", 0.0)
+        multi_service_discount = line_items.get("multi_service_discount", 0.0)
+        same_day_surcharge = line_items.get("same_day_surcharge", 0.0)
+        after_hours_surcharge = line_items.get("after_hours_surcharge", 0.0)
+        total_surcharge = same_day_surcharge + after_hours_surcharge
 
         payload = {
+            # Basic metadata
             "timestamp": datetime.utcnow().isoformat(),
             "contact_name": contact_name or "",
             "contact_phone": contact_phone or "",
@@ -546,16 +605,48 @@ def send_lead_to_zapier(
             "tv_size": tv_size,
             "wall_type": wall_type,
             "conceal_type": conceal_type,
-            "items_count": picture_count,
+            "items_count": picture_count,  # legacy field you were already using
             "same_day": same_day,
             "after_hours": after_hours,
             "booking_url": booking_url,
-            "base_mounting": line_items.get("tv_total", 0),
-            "addons": 0,
-            "multi_service_discount": line_items.get("multi_service_discount", 0),
-            "tax_rate": quote_result.get("tax_rate", 0),
-            "subtotal_before_tax": quote_result.get("subtotal_before_tax", 0),
-            "estimated_total_with_tax": quote_result.get("estimated_total_with_tax", 0),
+
+            # NEW – counts & flags
+            "tv_count": tv_count,
+            "tv_remove_count": tv_remove_count,
+            "picture_count_total": picture_count_total,
+            "picture_large_count": picture_large_count,
+            "gallery_wall": gallery_wall,
+            "shelves_count": shelves_count,
+            "shelves_remove_count": shelves_remove_count,
+            "closet_shelf_count": closet_shelf_count,
+            "closet_shelf_remove_count": closet_shelf_remove_count,
+            "curtains_count": curtains_count,
+            "curtains_remove_count": curtains_remove_count,
+            "ladder_required": ladder_required,
+            "estimated_hours": estimated_hours,
+
+            # NEW – line-item money fields
+            "tv_total": tv_total,
+            "tv_remove_total": tv_remove_total,
+            "picture_total": picture_total,
+            "picture_large_total": picture_large_total,
+            "shelves_total": shelves_total,
+            "shelves_remove_total": shelves_remove_total,
+            "closet_total": closet_total,
+            "closet_remove_total": closet_remove_total,
+            "curtains_total": curtains_total,
+            "curtains_remove_total": curtains_remove_total,
+            "addons": addons,
+            "multi_service_discount": multi_service_discount,
+            "same_day_surcharge": same_day_surcharge,
+            "after_hours_surcharge": after_hours_surcharge,
+            "total_surcharge": total_surcharge,
+
+            # Totals
+            "subtotal_before_tax": subtotal_before_tax,
+            "tax_rate": tax_rate,
+            "tax_amount": tax_amount,
+            "estimated_total_with_tax": estimated_total_with_tax,
         }
 
         print("📤 Payload sending to Zapier (quote):")
@@ -568,7 +659,9 @@ def send_lead_to_zapier(
     except Exception as e:
         print(f"❌ Error sending lead to Zapier: {e}")
 
-
+# =====================================================
+# Zapier sending helper for BOOKINGS
+# =====================================================
 # =====================================================
 # Zapier sending helper for BOOKINGS
 # =====================================================
@@ -586,6 +679,9 @@ def send_booking_to_zapier(
     duration_hours: float,
     num_services: int,
 ) -> None:
+    """
+    Sends booking details (including duration_hours) to the Booking Zap.
+    """
     if not BOOKING_WEBHOOK_URL:
         print("BOOKING_WEBHOOK_URL is empty; skipping booking Zapier send")
         return
@@ -628,7 +724,7 @@ def send_booking_to_zapier(
             "total_surcharge": total_surcharge,
             "services_this_visit": services_str,
             "num_services": num_services,
-            "duration_hours": duration_hours,
+            "duration_hours": duration_hours,   # NEW – matches quote’s estimated_hours
             "notes": notes or "",
         }
 
@@ -642,7 +738,6 @@ def send_booking_to_zapier(
     except Exception as e:
         print(f"❌ Error sending booking to Zapier: {e}")
 
-
 # =====================================================
 # Booking URL helper (front-end link into /book)
 # =====================================================
@@ -652,34 +747,92 @@ def build_booking_url(
     contact_phone: str,
     service: str,
     estimated_hours: Optional[float] = None,
-) -> str:
-    base_url = "/book"
+    service_flags: Optional[dict] = None,
+):
 
+    """
+    Build a booking URL that includes all multi-service flags.
+    service_flags = {
+        "tv": bool,
+        "pictures": bool,
+        "shelves": bool,
+        "closet": bool,
+        "decor": bool
+    }
+    """
+
+    base_url = "/book"
     params = []
+
     if contact_name:
         params.append(f"name={contact_name}")
     if contact_email:
         params.append(f"email={contact_email}")
     if contact_phone:
         params.append(f"phone={contact_phone}")
-    if service:
-        service_map = {
-            "tv_mounting": "TV Mounting",
-            "picture_hanging": "Picture & Art Hanging",
-            "floating_shelves": "Floating Shelves",
-            "closet_shelving": "Closet Shelving",
-            "decor": "Curtains & Blinds",
-            "curtains_blinds": "Curtains & Blinds",
-        }
-        label = service_map.get(service, "TV Mounting")
-        params.append(f"service_type={label}")
 
+    # Primary service label
+    service_map = {
+        "tv_mounting": "TV Mounting",
+        "picture_hanging": "Picture & Art Hanging",
+        "floating_shelves": "Floating Shelves",
+        "closet_shelving": "Closet Shelving",
+        "decor": "Curtains & Blinds",
+        "curtains_blinds": "Curtains & Blinds",
+    }
+    label = service_map.get(service, "TV Mounting")
+    params.append(f"service_type={label}")
+
+    # Estimated hours
     if estimated_hours is not None and estimated_hours > 0:
         params.append(f"hours={estimated_hours:.2f}")
 
-    if params:
-        return f"{base_url}?{'&'.join(params)}"
-    return base_url
+    # Multi-service flags
+    if service_flags:
+        for key, value in service_flags.items():
+            params.append(f"{key}={'true' if value else 'false'}")
+
+    if not params:
+        return base_url
+
+    return f"{base_url}?{'&'.join(params)}"
+
+    base_url = "/book"
+
+    # Map internal service code -> friendly label
+    service_map = {
+        "tv_mounting": "TV Mounting",
+        "picture_hanging": "Picture & Art Hanging",
+        "floating_shelves": "Floating Shelves",
+        "closet_shelving": "Closet Shelving",
+        "decor": "Curtains & Blinds",
+        "curtains_blinds": "Curtains & Blinds",
+    }
+    service_label = service_map.get(service, "TV Mounting")
+
+    params = {
+        "name": contact_name or "",
+        "email": contact_email or "",
+        "phone": contact_phone or "",
+        "service_type": service_label,
+    }
+
+    if estimated_hours is not None and estimated_hours > 0:
+        params["hours"] = f"{estimated_hours:.2f}"
+
+    if services_this_visit:
+        params["services"] = ", ".join(services_this_visit)
+
+    if num_services is not None and num_services > 0:
+        params["num_services"] = str(num_services)
+
+    # Remove empty values
+    params = {k: v for k, v in params.items() if v}
+
+    if not params:
+        return base_url
+
+    return f"{base_url}?" + urllib.parse.urlencode(params)
 
 
 # =====================================================
@@ -737,9 +890,13 @@ async def quote_html(
 
     zip_code: str = Form("20735"),
 ):
+
     def to_bool(value: str) -> bool:
         return str(value).lower() == "true"
 
+    # ----------------------------------------------------
+    # 1) Calculate the quote
+    # ----------------------------------------------------
     result = calculate_quote(
         service=service,
         tv_size=tv_size,
@@ -770,14 +927,35 @@ async def quote_html(
         gallery_wall=to_bool(gallery_wall),
     )
 
+    # ----------------------------------------------------
+    # 2) Detect all services included (for booking)
+    # ----------------------------------------------------
+    service_flags = {
+        "tv": (result.get("tv_count", 0) > 0),
+        "pictures": (
+            result.get("picture_count", 0) > 0
+            or result.get("picture_large_count", 0) > 0
+        ),
+        "shelves": (result.get("shelves_count", 0) > 0),
+        "closet": (result.get("closet_shelf_count", 0) > 0),
+        "decor": (result.get("curtains_count", 0) > 0),
+    }
+
+    # ----------------------------------------------------
+    # 3) Build booking URL (passes multi-service flags)
+    # ----------------------------------------------------
     booking_url = build_booking_url(
         contact_name=contact_name,
         contact_email=contact_email,
         contact_phone=contact_phone,
         service=service,
         estimated_hours=result.get("estimated_hours"),
+        service_flags=service_flags,
     )
 
+    # ----------------------------------------------------
+    # 4) Send Zapier lead
+    # ----------------------------------------------------
     background_tasks.add_task(
         send_lead_to_zapier,
         contact_name,
@@ -795,6 +973,9 @@ async def quote_html(
         result,
     )
 
+    # ----------------------------------------------------
+    # 5) Render quote result page
+    # ----------------------------------------------------
     return templates.TemplateResponse(
         "quote_result.html",
         {
@@ -815,12 +996,25 @@ async def quote_html(
 def get_quote(request_data: QuoteRequest, background_tasks: BackgroundTasks):
     result = calculate_quote(**request_data.dict())
 
+        # Build flags for JSON quote as well
+    service_flags = {
+        "tv": (result.get("tv_count", 0) > 0),
+        "pictures": (
+            result.get("picture_count", 0) > 0
+            or result.get("picture_large_count", 0) > 0
+        ),
+        "shelves": (result.get("shelves_count", 0) > 0),
+        "closet": (result.get("closet_shelf_count", 0) > 0),
+        "decor": (result.get("curtains_count", 0) > 0),
+    }
+
     booking_url = build_booking_url(
         contact_name=request_data.contact_name or "",
         contact_email=request_data.contact_email or "",
         contact_phone=request_data.contact_phone or "",
         service=request_data.service,
         estimated_hours=result.get("estimated_hours"),
+        service_flags=service_flags,
     )
 
     background_tasks.add_task(
