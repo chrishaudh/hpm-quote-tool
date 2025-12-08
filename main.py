@@ -28,6 +28,16 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
 # =====================================================
+# QUOTE FORM (HOME PAGE)
+# =====================================================
+@app.get("/", response_class=HTMLResponse)
+async def show_quote_form(request: Request):
+    return templates.TemplateResponse(
+        "quote_form.html",
+        {"request": request},
+    )
+
+# =====================================================
 # Service + Zapier configuration
 # =====================================================
 
