@@ -145,17 +145,30 @@
       <div class="two-col">
         <div class="field-group">
           <label for="contact_name">Name</label>
-          <input id="contact_name" name="contact_name" type="text" />
+          <input id="contact_name" name="contact_name" type="text" required />
         </div>
         <div class="field-group">
-          <label for="contact_phone">Phone</label>
-          <input id="contact_phone" name="contact_phone" type="tel" />
-        </div>
-      </div>
-      <div class="field-group">
-        <label for="contact_email">Email</label>
-        <input id="contact_email" name="contact_email" type="email" />
-      </div>
+  <label for="contact_phone">Phone</label>
+  <input
+    id="contact_phone"
+    name="contact_phone"
+    type="tel"
+    required
+    pattern="^[0-9\-\(\)\s]{10,}$"
+    placeholder="(240) 348-2278"
+  />
+</div>
+
+<div class="field-group">
+  <label for="contact_email">Email</label>
+  <input
+    id="contact_email"
+    name="contact_email"
+    type="email"
+    required
+    placeholder="you@example.com"
+  />
+</div>
       <div class="two-col">
         <div class="field-group">
           <label for="zip_code">ZIP Code</label>
@@ -231,7 +244,7 @@
           value="1"
         />
       </div>
-      
+
         <div class="two-col">
           <div class="field-group">
             <label for="tv_size">TV size (inches)</label>

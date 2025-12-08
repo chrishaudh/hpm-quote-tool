@@ -834,15 +834,6 @@ def build_booking_url(
 
     return f"{base_url}?" + urllib.parse.urlencode(params)
 
-
-# =====================================================
-# MAIN QUOTE FORM (HTML)
-# =====================================================
-@app.get("/", response_class=HTMLResponse)
-def show_form(request: Request):
-    return templates.TemplateResponse("quote_form.html", {"request": request})
-
-
 # =====================================================
 # QUOTE (HTML)
 # =====================================================
@@ -893,6 +884,36 @@ async def quote_html(
 
     def to_bool(value: str) -> bool:
         return str(value).lower() == "true"
+
+    # ----------------------------------------------------
+    # 0) Validate contact info (name + email + phone REQUIRED)
+    # ----------------------------------------------------
+    import re
+
+    name_clean = (contact_name or "").strip()
+    email_clean = (contact_email or "").strip()
+    phone_digits = re.sub(r"\D", "", contact_phone or "")
+
+    if not name_clean:
+        return HTMLResponse(
+            "<h3>Error: Your name is required.</h3>"
+            "<p>Please go back and enter your name so I know who the quote is for.</p>",
+            status_code=400,
+        )
+
+    if not email_clean or "@" not in email_clean:
+        return HTMLResponse(
+            "<h3>Error: A valid email address is required.</h3>"
+            "<p>Please go back and enter a valid email so I can send your quote and booking link.</p>",
+            status_code=400,
+        )
+
+    if not phone_digits or len(phone_digits) < 10:
+        return HTMLResponse(
+            "<h3>Error: A valid phone number is required.</h3>"
+            "<p>Please go back and enter a working phone number so I can confirm your appointment.</p>",
+            status_code=400,
+        )
 
     # ----------------------------------------------------
     # 1) Calculate the quote
@@ -987,7 +1008,6 @@ async def quote_html(
             **result,
         },
     )
-
 
 # =====================================================
 # QUOTE (JSON API)
