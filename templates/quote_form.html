@@ -134,7 +134,7 @@
     <h1>Get a Fast Quote</h1>
     <p class="lead">
       Tell me what you need done. You can mix and match multiple services in one visit
-      (TV mounting, picture & art hanging, shelves, closet shelving, and curtains/blinds/decor).
+      (TV mounting, picture &amp; art hanging, shelves, closet shelving, and curtains/blinds/decor).
     </p>
   </header>
 
@@ -142,37 +142,50 @@
     <!-- Contact Info -->
     <section>
       <h2 class="section-title">Your Info</h2>
+
       <div class="two-col">
         <div class="field-group">
           <label for="contact_name">Name</label>
-          <input id="contact_name" name="contact_name" type="text" required />
+          <input
+            id="contact_name"
+            name="contact_name"
+            type="text"
+            required
+          />
         </div>
         <div class="field-group">
-  <label for="contact_phone">Phone</label>
-  <input
-    id="contact_phone"
-    name="contact_phone"
-    type="tel"
-    required
-    pattern="^[0-9\-\(\)\s]{10,}$"
-    placeholder="(240) 348-2278"
-  />
-</div>
+          <label for="contact_phone">Phone</label>
+          <input
+            id="contact_phone"
+            name="contact_phone"
+            type="tel"
+            required
+            pattern="^[0-9\-\(\)\s]{10,}$"
+            placeholder="(240) 348-2278"
+          />
+        </div>
+      </div>
 
-<div class="field-group">
-  <label for="contact_email">Email</label>
-  <input
-    id="contact_email"
-    name="contact_email"
-    type="email"
-    required
-    placeholder="you@example.com"
-  />
-</div>
+      <div class="field-group">
+        <label for="contact_email">Email</label>
+        <input
+          id="contact_email"
+          name="contact_email"
+          type="email"
+          required
+          placeholder="you@example.com"
+        />
+      </div>
+
       <div class="two-col">
         <div class="field-group">
           <label for="zip_code">ZIP Code</label>
-          <input id="zip_code" name="zip_code" type="text" value="20735" />
+          <input
+            id="zip_code"
+            name="zip_code"
+            type="text"
+            value="20735"
+          />
         </div>
         <div class="field-group">
           <label for="preferred_contact">Preferred contact method</label>
@@ -231,19 +244,19 @@
     <section id="section-tv" data-service-key="tv_mounting" class="service-section">
       <h2 class="section-title">TV Mounting</h2>
       <h3 class="section-subtitle">
-        A basic TV mounting under 60" is about $60; 60" or larger is about $70 before wall type & add-ons.
+        A basic TV mounting under 60" is about $60; 60" or larger is about $70 before wall type &amp; add-ons.
       </h3>
       <div class="card">
-              <div class="field-group">
-        <label for="tv_count">How many TVs?</label>
-        <input
-          id="tv_count"
-          name="tv_count"
-          type="number"
-          min="0"
-          value="1"
-        />
-      </div>
+        <div class="field-group">
+          <label for="tv_count">How many TVs?</label>
+          <input
+            id="tv_count"
+            name="tv_count"
+            type="number"
+            min="0"
+            value="1"
+          />
+        </div>
 
         <div class="two-col">
           <div class="field-group">
@@ -308,16 +321,22 @@
       <div class="card">
         <div class="field-group">
           <label for="picture_count">Total number of pictures / art pieces</label>
-          <input id="picture_count" name="picture_count" type="number" min="0" value="0" />
+          <input
+            id="picture_count"
+            name="picture_count"
+            type="number"
+            min="0"
+            value="0"
+          />
         </div>
 
         <div class="field-group" style="margin-top:0.5rem;">
-          <label for="large_picture_count">
+          <label for="picture_large_count">
             How many pieces are 5 ft or wider?
           </label>
           <input
-            id="large_picture_count"
-            name="large_picture_count"
+            id="picture_large_count"
+            name="picture_large_count"
             type="number"
             min="0"
             value="0"

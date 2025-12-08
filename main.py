@@ -881,15 +881,12 @@ async def quote_html(
 
     zip_code: str = Form("20735"),
 ):
-
     def to_bool(value: str) -> bool:
         return str(value).lower() == "true"
 
     # ----------------------------------------------------
     # 0) Validate contact info (name + email + phone REQUIRED)
     # ----------------------------------------------------
-    import re
-
     name_clean = (contact_name or "").strip()
     email_clean = (contact_email or "").strip()
     phone_digits = re.sub(r"\D", "", contact_phone or "")
