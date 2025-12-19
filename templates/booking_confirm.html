@@ -205,6 +205,12 @@
 
     <div class="cta-row">
       <a href="/" class="btn btn-primary">Back to Quote Tool</a>
+      <a
+       href="/pay?name={{ name|urlencode }}&email={{ (email or '')|urlencode }}&phone={{ (phone or '')|urlencode }}&service_type={{ service_type|urlencode }}&start_iso={{ start.isoformat()|urlencode }}"
+       class="btn btn-primary"
+      >
+       Secure $20 Appointment Hold
+      </a>
       <a href="mailto:hawkinspromounting@gmail.com?subject=Hawkins%20Pro%20Mounting%20Booking"
          class="btn btn-ghost">
         Update or ask a question

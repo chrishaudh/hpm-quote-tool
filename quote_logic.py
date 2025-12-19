@@ -403,6 +403,7 @@ def calculate_quote(
     service: str,
     tv_size: int,
     tv_count: int,
+    tv_sizes: list[int] | None = None,
     wall_type: str,
     conceal_type: str,
     soundbar: bool,
@@ -438,24 +439,33 @@ def calculate_quote(
     # ----------------------------
     # 1) TV Mounting pricing
     # ----------------------------
-    tv_count = max(0, int(tv_count))
-    tv_size_val = max(0, int(tv_size))
+    tv_sizes = tv_sizes or []
+    tv_sizes_clean = [max(0, int(x)) for x in tv_sizes if int(x) > 0]
 
-    # per-TV base
-    if tv_size_val <= 0 or tv_count == 0:
-        base_tv_price = 0.0
+    # If tv_sizes were supplied, derive tv_count from them
+    if tv_sizes_clean:
+        tv_count = len(tv_sizes_clean)
+
+    # Base TV labor = sum(per-TV price by its size)
+    base_tv_price = 0.0
+    if tv_sizes_clean:
+        for size in tv_sizes_clean:
+            base_tv_price += (60.0 if size < 60 else 70.0)
     else:
-        per_tv = 60.0 if tv_size_val < 60 else 70.0
-        base_tv_price = per_tv * tv_count
+        # fallback to legacy single size * tv_count
+        tv_count = max(0, int(tv_count))
+        tv_size_val = max(0, int(tv_size))
+        if tv_size_val > 0 and tv_count > 0:
+            per_tv = 60.0 if tv_size_val < 60 else 70.0
+            base_tv_price = per_tv * tv_count
 
-    # wall type & concealment adjustments on total TV labor
+    # wall type & concealment adjustments (applied to total TV labor)
     tv_with_wall = adjust_for_wall_type(base_tv_price, wall_type)
     tv_with_concealment = adjust_for_concealment(tv_with_wall, conceal_type)
 
-    # addons
+    # addons (apply once per visit as you do today)
     tv_with_addons = price_tv_addons(tv_with_concealment, soundbar, led)
 
-    # TV removal pricing ($5 each, same as floating shelves)
     tv_remove_count = max(0, int(tv_remove_count))
     tv_remove_total = tv_remove_count * 5.0
 
@@ -643,6 +653,7 @@ def calculate_quote(
         "picture_count": pic_count,
         "picture_large_count": picture_large_count,
         "tv_size": tv_size_val,
+        "tv_sizes": tv_sizes_clean,
         "tv_count": tv_count,
         "tv_remove_count": tv_remove_count,
         "shelves_count": shelf_count,

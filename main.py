@@ -6,6 +6,9 @@ import urllib.parse
 import requests
 import pytz
 
+import os
+import stripe
+
 from fastapi import FastAPI, Request, Form, BackgroundTasks, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
@@ -28,6 +31,17 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
 # =====================================================
+# Stripe (Payment Holds)
+# =====================================================
+STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
+STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY", "")
+ADMIN_CAPTURE_TOKEN = os.getenv("ADMIN_CAPTURE_TOKEN", "")
+DEPOSIT_AMOUNT_CENTS = 2000  # $20.00
+
+if STRIPE_SECRET_KEY:
+    stripe.api_key = STRIPE_SECRET_KEY
+
+# =====================================================
 # QUOTE FORM (HOME PAGE)
 # =====================================================
 @app.get("/", response_class=HTMLResponse)
@@ -36,6 +50,73 @@ async def show_quote_form(request: Request):
         "quote_form.html",
         {"request": request},
     )
+
+# =====================================================
+# PAYMENT HOLD (STRIPE)
+# =====================================================
+
+@app.get("/pay", response_class=HTMLResponse)
+async def pay_page(
+    request: Request,
+    name: str = "",
+    email: str = "",
+    phone: str = "",
+    service_type: str = "",
+    start_iso: str = "",
+):
+    return templates.TemplateResponse(
+        "pay_hold.html",
+        {
+            "request": request,
+            "publishable_key": STRIPE_PUBLISHABLE_KEY,
+            "amount_dollars": "20.00",
+            "name": name,
+            "email": email,
+            "phone": phone,
+            "service_type": service_type,
+            "start_iso": start_iso,
+        },
+    )
+
+
+@app.post("/api/create-hold-intent")
+async def create_hold_intent(payload: dict):
+    if not STRIPE_SECRET_KEY:
+        return JSONResponse(
+            status_code=500,
+            content={"error": "Stripe not configured"},
+        )
+
+    intent = stripe.PaymentIntent.create(
+        amount=DEPOSIT_AMOUNT_CENTS,
+        currency="usd",
+        capture_method="manual",
+        description="Hawkins Pro Mounting – Appointment Hold",
+        automatic_payment_methods={"enabled": True},
+    )
+
+    return {
+        "client_secret": intent.client_secret,
+        "payment_intent_id": intent.id,
+    }
+
+
+@app.post("/api/capture-hold")
+async def capture_hold(payload: dict):
+    token = payload.get("token", "")
+    payment_intent_id = payload.get("payment_intent_id", "")
+
+    if token != ADMIN_CAPTURE_TOKEN:
+        return JSONResponse(
+            status_code=401,
+            content={"error": "Unauthorized"},
+        )
+
+    intent = stripe.PaymentIntent.capture(payment_intent_id)
+    return {
+        "status": intent.status,
+        "payment_intent_id": intent.id,
+    }
 
 # =====================================================
 # Service + Zapier configuration
@@ -61,7 +142,6 @@ ZAPIER_WEBHOOK_URL = "https://hooks.zapier.com/hooks/catch/25408903/uz2ihgh/"
 BOOKING_WEBHOOK_URL = "https://hooks.zapier.com/hooks/catch/25408903/ukipdo4/"
 
 CALENDAR_ID = "primary"
-
 
 # =====================================================
 # Helper: compute booking duration (fallback)
@@ -759,29 +839,24 @@ def build_booking_url(
     estimated_hours: Optional[float] = None,
     service_flags: Optional[dict] = None,
 ):
-
     """
-    Build a booking URL that includes all multi-service flags.
-    service_flags = {
-        "tv": bool,
-        "pictures": bool,
-        "shelves": bool,
-        "closet": bool,
-        "decor": bool
-    }
+    Build a booking URL that includes:
+      - name/email/phone
+      - primary service label
+      - estimated hours
+      - multi-service flags (tv/pictures/shelves/closet/decor)
     """
 
     base_url = "/book"
+
     params = []
-
     if contact_name:
-        params.append(f"name={contact_name}")
+        params.append(("name", contact_name))
     if contact_email:
-        params.append(f"email={contact_email}")
+        params.append(("email", contact_email))
     if contact_phone:
-        params.append(f"phone={contact_phone}")
+        params.append(("phone", contact_phone))
 
-    # Primary service label
     service_map = {
         "tv_mounting": "TV Mounting",
         "picture_hanging": "Picture & Art Hanging",
@@ -791,58 +866,17 @@ def build_booking_url(
         "curtains_blinds": "Curtains & Blinds",
     }
     label = service_map.get(service, "TV Mounting")
-    params.append(f"service_type={label}")
+    params.append(("service_type", label))
 
-    # Estimated hours
     if estimated_hours is not None and estimated_hours > 0:
-        params.append(f"hours={estimated_hours:.2f}")
+        params.append(("hours", f"{estimated_hours:.2f}"))
 
-    # Multi-service flags
     if service_flags:
         for key, value in service_flags.items():
-            params.append(f"{key}={'true' if value else 'false'}")
+            params.append((key, "true" if value else "false"))
 
-    if not params:
-        return base_url
-
-    return f"{base_url}?{'&'.join(params)}"
-
-    base_url = "/book"
-
-    # Map internal service code -> friendly label
-    service_map = {
-        "tv_mounting": "TV Mounting",
-        "picture_hanging": "Picture & Art Hanging",
-        "floating_shelves": "Floating Shelves",
-        "closet_shelving": "Closet Shelving",
-        "decor": "Curtains & Blinds",
-        "curtains_blinds": "Curtains & Blinds",
-    }
-    service_label = service_map.get(service, "TV Mounting")
-
-    params = {
-        "name": contact_name or "",
-        "email": contact_email or "",
-        "phone": contact_phone or "",
-        "service_type": service_label,
-    }
-
-    if estimated_hours is not None and estimated_hours > 0:
-        params["hours"] = f"{estimated_hours:.2f}"
-
-    if services_this_visit:
-        params["services"] = ", ".join(services_this_visit)
-
-    if num_services is not None and num_services > 0:
-        params["num_services"] = str(num_services)
-
-    # Remove empty values
-    params = {k: v for k, v in params.items() if v}
-
-    if not params:
-        return base_url
-
-    return f"{base_url}?" + urllib.parse.urlencode(params)
+    query = urllib.parse.urlencode(params)
+    return f"{base_url}?{query}" if query else base_url
 
 # =====================================================
 # QUOTE (HTML)
@@ -925,10 +959,28 @@ async def quote_html(
     # ----------------------------------------------------
     # 1) Calculate the quote
     # ----------------------------------------------------
+    # NEW: read tv_sizes[] from the posted form (one input per TV)
+    form = await request.form()
+    tv_sizes_raw = form.getlist("tv_sizes")
+
+    tv_sizes = []
+    for s in tv_sizes_raw:
+        try:
+            v = int(str(s).strip() or "0")
+        except ValueError:
+            v = 0
+        if v > 0:
+            tv_sizes.append(v)
+
+    # If sizes were entered, tv_count becomes the number of size boxes
+    if tv_sizes:
+        tv_count = len(tv_sizes)
+
     result = calculate_quote(
         service=service,
         tv_size=tv_size,
         tv_count=tv_count,
+        tv_sizes=tv_sizes,
         wall_type=wall_type,
         conceal_type=conceal_type,
         soundbar=to_bool(soundbar),
@@ -1023,7 +1075,7 @@ async def quote_html(
 def get_quote(request_data: QuoteRequest, background_tasks: BackgroundTasks):
     result = calculate_quote(**request_data.dict())
 
-        # Build flags for JSON quote as well
+    # Build flags for JSON quote as well
     service_flags = {
         "tv": (result.get("tv_count", 0) > 0),
         "pictures": (

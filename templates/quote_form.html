@@ -259,20 +259,26 @@
         </div>
 
         <div class="two-col">
-          <div class="field-group">
-            <label for="tv_size">TV size (inches)</label>
-            <input id="tv_size" name="tv_size" type="number" min="0" />
-          </div>
-          <div class="field-group">
-            <label for="wall_type">Wall type</label>
-            <select id="wall_type" name="wall_type">
-              <option value="drywall">Drywall</option>
-              <option value="brick">Brick</option>
-              <option value="concrete">Concrete</option>
-              <option value="tile/stone">Tile / Stone</option>
-            </select>
-          </div>
-        </div>
+  <div class="field-group">
+    <label for="wall_type">Wall type</label>
+    <select id="wall_type" name="wall_type">
+      <option value="drywall">Drywall</option>
+      <option value="brick">Brick</option>
+      <option value="concrete">Concrete</option>
+      <option value="tile/stone">Tile / Stone</option>
+    </select>
+  </div>
+</div>
+
+<!-- NEW: dynamic per-TV size inputs -->
+<div class="field-group" id="tv-sizes-wrapper" style="margin-top:0.5rem;">
+  <label>TV sizes (inches)</label>
+  <div id="tv-sizes-container" class="two-col"></div>
+  <p class="hint">Enter each TV size so the estimate can price them correctly.</p>
+</div>
+
+<!-- Keep legacy tv_size (hidden) for backward compatibility -->
+<input id="tv_size" name="tv_size" type="hidden" value="0" />
 
         <div class="field-group">
           <label for="conceal_type">Wire concealment</label>
@@ -662,6 +668,54 @@
     // Initialize layout on load
     updateServiceLayout();
     serviceSelect.addEventListener("change", updateServiceLayout);
+
+    const tvCountInput = document.getElementById("tv_count");
+  const tvSizesContainer = document.getElementById("tv-sizes-container");
+  const legacyTvSizeHidden = document.getElementById("tv_size");
+
+  function renderTvSizeInputs() {
+    if (!tvSizesContainer || !tvCountInput) return;
+
+    const count = Math.max(0, parseInt(tvCountInput.value || "0", 10));
+    tvSizesContainer.innerHTML = "";
+
+    for (let i = 1; i <= count; i++) {
+      const wrap = document.createElement("div");
+      wrap.className = "field-group";
+
+      const label = document.createElement("label");
+      label.textContent = `TV size #${i} (inches)`;
+      label.style.fontWeight = "600";
+
+      const input = document.createElement("input");
+      input.type = "number";
+      input.min = "0";
+      input.name = "tv_sizes";        // IMPORTANT: same name => list on backend
+      input.placeholder = "e.g. 55";
+      input.required = (count > 0);
+
+      input.addEventListener("input", () => {
+        if (legacyTvSizeHidden) {
+          const first = document.querySelector('input[name="tv_sizes"]');
+          legacyTvSizeHidden.value = first && first.value ? first.value : "0";
+        }
+      });
+
+      wrap.appendChild(label);
+      wrap.appendChild(input);
+      tvSizesContainer.appendChild(wrap);
+    }
+
+    if (legacyTvSizeHidden) {
+      const first = document.querySelector('input[name="tv_sizes"]');
+      legacyTvSizeHidden.value = first && first.value ? first.value : "0";
+    }
+  }
+
+  // render on load + whenever tv_count changes
+  renderTvSizeInputs();
+  tvCountInput.addEventListener("change", renderTvSizeInputs);
+  tvCountInput.addEventListener("input", renderTvSizeInputs);
   </script>
 </body>
 </html>

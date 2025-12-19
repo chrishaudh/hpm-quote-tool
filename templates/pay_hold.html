@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Secure Your Appointment – Hawkins Pro Mounting</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; max-width:700px; margin:0 auto; padding:1.5rem; background:#f7f7f7; }
+    .card { background:#fff; border-radius:0.75rem; padding:1.25rem 1.5rem; box-shadow:0 4px 14px rgba(0,0,0,0.05); }
+    h1 { font-size:1.4rem; margin:0 0 0.5rem; }
+    p { color:#4b5563; margin:0.25rem 0; }
+    #card-element { border:1px solid #d1d5db; border-radius:0.5rem; padding:0.75rem; background:#fff; margin-top:0.75rem; }
+    button { margin-top:1rem; width:100%; padding:0.85rem 1.25rem; border-radius:999px; border:none; font-weight:700; cursor:pointer; background:#2563eb; color:#fff; font-size:1rem; }
+    button:hover { background:#1d4ed8; }
+    .muted { font-size:0.85rem; color:#6b7280; margin-top:0.75rem; }
+    .error { color:#b91c1c; margin-top:0.75rem; }
+    .success { color:#166534; margin-top:0.75rem; }
+  </style>
+  <script src="https://js.stripe.com/v3/"></script>
+</head>
+<body>
+  <div class="card">
+    <h1>Secure your appointment (${{ amount_dollars }} hold)</h1>
+    <p>This places a temporary hold to lock in your booking time.</p>
+    <p class="muted">You’ll receive a receipt once your card is authorized.</p>
+
+    <div id="card-element"></div>
+    <div id="msg" class="muted"></div>
+
+    <button id="payBtn">Authorize ${{ amount_dollars }} Hold</button>
+    <div id="err" class="error"></div>
+    <div id="ok" class="success"></div>
+  </div>
+
+  <script>
+    const publishableKey = "{{ publishable_key }}";
+    const stripe = Stripe(publishableKey);
+
+    const elements = stripe.elements();
+    const card = elements.create("card");
+    card.mount("#card-element");
+
+    const payBtn = document.getElementById("payBtn");
+    const errBox = document.getElementById("err");
+    const okBox = document.getElementById("ok");
+    const msgBox = document.getElementById("msg");
+
+    async function createIntent() {
+      const resp = await fetch("/api/create-hold-intent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "{{ name }}",
+          email: "{{ email }}",
+          phone: "{{ phone }}",
+          service_type: "{{ service_type }}",
+          start_iso: "{{ start_iso }}",
+        })
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || "Failed to start payment");
+      return data.client_secret;
+    }
+
+    payBtn.addEventListener("click", async () => {
+      errBox.textContent = "";
+      okBox.textContent = "";
+      msgBox.textContent = "Starting secure authorization…";
+      payBtn.disabled = true;
+
+      try {
+        const clientSecret = await createIntent();
+
+        const result = await stripe.confirmCardPayment(clientSecret, {
+          payment_method: { card: card }
+        });
+
+        if (result.error) {
+          throw new Error(result.error.message || "Authorization failed");
+        }
+
+        okBox.textContent = "Hold authorized ✅ You’re all set.";
+        msgBox.textContent = "";
+      } catch (e) {
+        errBox.textContent = e.message;
+        msgBox.textContent = "";
+      } finally {
+        payBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

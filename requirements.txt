@@ -3,6 +3,7 @@ uvicorn[standard]
 jinja2
 python-multipart
 requests
+stripes
 
 # Google Calendar API dependencies
 google-api-python-client

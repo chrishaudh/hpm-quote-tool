@@ -200,18 +200,18 @@
       {% set li = line_items or {} %}
 
       {% if li.tv_total and li.tv_total != 0 %}
-        <div class="line-item-row">
-          <span class="line-item-label">
-            TV mounting
-            {% if tv_count and tv_count > 0 %}
-              ({{ tv_count }} TV{% if tv_count != 1 %}s{% endif %}{% if tv_size and tv_size > 0 %}, {{ tv_size }}"{% endif %})
-            {% elif tv_size and tv_size > 0 %}
-              ({{ tv_size }}")
-            {% endif %}
-          </span>
-          <span class="line-item-value">${{ '%.2f' % li.tv_total }}</span>
-        </div>
-      {% endif %}
+       <div class="line-item-row">
+         <span class="line-item-label">
+           TV mounting
+           {% if tv_sizes and tv_sizes|length > 0 %}
+             ({{ tv_sizes|length }} TVs: {{ tv_sizes|join('", "') }}" )
+           {% elif tv_count and tv_count > 0 %}
+             ({{ tv_count }} TV{% if tv_count != 1 %}s{% endif %}{% if tv_size and tv_size > 0 %}, {{ tv_size }}"{% endif %})
+           {% endif %}
+         </span>
+         <span class="line-item-value">${{ '%.2f' % li.tv_total }}</span>
+       </div>
+     {% endif %}
 
       {% if li.tv_removal_total and li.tv_removal_total != 0 %}
         <div class="line-item-row">
