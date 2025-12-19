@@ -435,6 +435,31 @@ def calculate_quote(
     - Pricing uses your flat-fee per-item rules.
     - estimated_hours uses your time assumptions per service and removal.
     """
+    # ------------------------------
+    # Normalize / sanitize TV inputs
+    # ------------------------------
+    try:
+        tv_size_val = int(tv_size or 0)
+    except Exception:
+        tv_size_val = 0
+
+    tv_sizes_clean: list[int] = []
+    for s in (tv_sizes or []):
+        try:
+            v = int(str(s).strip() or "0")
+        except Exception:
+            v = 0
+        if v > 0:
+            tv_sizes_clean.append(v)
+
+    # If individual TV sizes were provided, those drive tv_count
+    # and we pick a "display" size for summaries (largest is most useful).
+    if tv_sizes_clean:
+        tv_count = len(tv_sizes_clean)
+        tv_size_val = max(tv_sizes_clean)
+
+    # Keep a cleaned list for templates / emails / zapier payloads
+    tv_sizes = tv_sizes_clean
 
     # ----------------------------
     # 1) TV Mounting pricing
