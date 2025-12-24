@@ -23,6 +23,10 @@
     <h1>Secure your appointment (${{ amount_dollars }} hold)</h1>
     <p>This places a temporary hold to lock in your booking time.</p>
     <p class="muted">You’ll receive a receipt once your card is authorized.</p>
+    <p class="muted">
+     <strong>{{ service_type }}</strong>
+     {% if time_slot %} • {{ time_slot }}{% endif %}
+    </p>
 
     <div id="card-element"></div>
     <div id="msg" class="muted"></div>
@@ -33,7 +37,7 @@
   </div>
 
   <script>
-    const publishableKey = "{{ publishable_key }}";
+    const publishableKey = {{ publishable_key|tojson }};
     const stripe = Stripe(publishableKey);
 
     const elements = stripe.elements();
@@ -45,48 +49,102 @@
     const okBox = document.getElementById("ok");
     const msgBox = document.getElementById("msg");
 
+    // ✅ SAFE: Server values serialized as JSON (won’t break JS)
+    const bookingPayload = {
+        service_type: {{ service_type|tojson }},
+        time_slot: {{ time_slot|tojson }},
+        appointment_date: {{ appointment_date|tojson }},
+        appointment_time: {{ appointment_time|tojson }},
+
+        services_this_visit_raw: {{ services_this_visit_raw|tojson }},
+        num_services: {{ num_services|tojson }},
+        estimated_hours: {{ estimated_hours|tojson }},
+
+        name: {{ name|tojson }},
+        email: {{ email|tojson }},
+        phone: {{ phone|tojson }},
+
+        address_street: {{ address_street|tojson }},
+        address_city: {{ address_city|tojson }},
+        address_state: {{ address_state|tojson }},
+        address_zip: {{ address_zip|tojson }},
+
+        notes: {{ notes|tojson }},
+    };
+
+    // ✅ Convert types for /book (FastAPI Form fields)
+    if (bookingPayload.num_services !== "" && bookingPayload.num_services != null) {
+        const n = parseInt(bookingPayload.num_services, 10);
+        bookingPayload.num_services = isNaN(n) ? "" : n;
+    }
+
+    if (bookingPayload.estimated_hours !== "" && bookingPayload.estimated_hours != null) {
+        const h = parseFloat(bookingPayload.estimated_hours);
+        bookingPayload.estimated_hours = isNaN(h) ? "" : h;
+    }
+
     async function createIntent() {
-      const resp = await fetch("/api/create-hold-intent", {
+        const resp = await fetch("/api/create-hold-intent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: "{{ name }}",
-          email: "{{ email }}",
-          phone: "{{ phone }}",
-          service_type: "{{ service_type }}",
-          start_iso: "{{ start_iso }}",
-        })
-      });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error || "Failed to start payment");
-      return data.client_secret;
+        body: JSON.stringify(bookingPayload),
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || "Failed to start payment");
+        return data.client_secret;
+    }
+
+    function postToBook(paymentIntentId) {
+        const form = document.createElement("form");
+        form.method = "POST";
+        form.action = "/book";
+
+        for (const [key, val] of Object.entries(bookingPayload)) {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = key;
+        input.value = (val === null || val === undefined) ? "" : String(val);
+        form.appendChild(input);
+        }
+
+        const pi = document.createElement("input");
+        pi.type = "hidden";
+        pi.name = "payment_intent_id";
+        pi.value = paymentIntentId;
+        form.appendChild(pi);
+
+        document.body.appendChild(form);
+        form.submit();
     }
 
     payBtn.addEventListener("click", async () => {
-      errBox.textContent = "";
-      okBox.textContent = "";
-      msgBox.textContent = "Starting secure authorization…";
-      payBtn.disabled = true;
+        errBox.textContent = "";
+        okBox.textContent = "";
+        msgBox.textContent = "Starting secure authorization…";
+        payBtn.disabled = true;
 
-      try {
+        try {
         const clientSecret = await createIntent();
 
         const result = await stripe.confirmCardPayment(clientSecret, {
-          payment_method: { card: card }
+            payment_method: { card: card },
         });
 
-        if (result.error) {
-          throw new Error(result.error.message || "Authorization failed");
-        }
+        if (result.error) throw new Error(result.error.message || "Authorization failed");
 
-        okBox.textContent = "Hold authorized ✅ You’re all set.";
+        const paymentIntentId = result.paymentIntent && result.paymentIntent.id;
+        if (!paymentIntentId) throw new Error("Payment succeeded but PaymentIntent ID was missing.");
+
+        okBox.textContent = "Hold authorized ✅ Finalizing your booking…";
         msgBox.textContent = "";
-      } catch (e) {
+
+        postToBook(paymentIntentId);
+        payBtn.disabled = true;
+        } catch (e) {
         errBox.textContent = e.message;
         msgBox.textContent = "";
-      } finally {
         payBtn.disabled = false;
-      }
+        }
     });
   </script>
 </body>

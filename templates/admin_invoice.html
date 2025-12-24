@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>HPM Admin – Create Invoice</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; max-width:820px; margin:0 auto; padding:1.5rem; background:#f7f7f7; }
+    .card { background:#fff; border-radius:0.75rem; padding:1.25rem 1.5rem; box-shadow:0 4px 14px rgba(0,0,0,0.05); }
+    h1 { margin:0 0 0.75rem; font-size:1.4rem; }
+    label { display:block; font-weight:600; margin-top:0.9rem; }
+    input, textarea { width:100%; padding:0.7rem; border:1px solid #d1d5db; border-radius:0.5rem; margin-top:0.35rem; }
+    textarea { min-height:90px; }
+    .row { display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem; }
+    .btn { margin-top:1rem; width:100%; padding:0.85rem 1.25rem; border-radius:999px; border:none; font-weight:700; cursor:pointer; background:#2563eb; color:#fff; font-size:1rem; }
+    .btn:hover { background:#1d4ed8; }
+    .btn-ghost { background:#fff; color:#111827; border:1px solid #d1d5db; }
+    .btn-ghost:hover { background:#f3f4f6; }
+    .muted { color:#6b7280; font-size:0.9rem; }
+    .success { color:#166534; font-weight:600; margin-top:0.75rem; }
+    .error { color:#b91c1c; font-weight:600; margin-top:0.75rem; }
+    .links { margin-top:1rem; padding:0.75rem; background:#f9fafb; border:1px solid #e5e7eb; border-radius:0.75rem; }
+    .linkrow { display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; margin-top:0.4rem; }
+    .small { font-size:0.85rem; }
+    code { background:#111827; color:#fff; padding:0.15rem 0.35rem; border-radius:0.4rem; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>HPM Admin — Create & Send Invoice</h1>
+    <p class="muted">This will email the customer a Stripe invoice and show you the hosted payment link + PDF.</p>
+
+    <div class="row">
+      <div>
+        <label>Customer name</label>
+        <input id="name" placeholder="John Doe" />
+      </div>
+      <div>
+        <label>Customer email</label>
+        <input id="email" placeholder="john@email.com" />
+      </div>
+    </div>
+
+    <div class="row">
+     <div>
+       <label>Amount (USD)</label>
+       <input id="amount" placeholder="250.00" />
+       <div class="muted small">We’ll convert this to cents automatically.</div>
+     </div>
+    </div>
+
+    <label>Description (what was done)</label>
+    <textarea id="desc" placeholder="TV mounting + in-wall wire concealment"></textarea>
+
+    <div class="row">
+      <div>
+        <label>Booking ref (optional)</label>
+        <div class="linkrow" style="margin-top:0.35rem;">
+          <input id="booking_ref" placeholder="HPM-20251221-ABC123" value="{{ booking_ref or '' }}" />
+          <button class="btn btn-ghost small" id="copyBookingRef" style="width:auto; padding:0.45rem 0.75rem;">
+            Copy
+          </button>
+        </div>
+        <div class="muted small">If blank, we’ll generate one automatically.</div>
+      </div>
+      <div>
+        <label>Address ZIP (optional)</label>
+        <input id="address_zip" placeholder="20735" />
+      </div>
+    </div>
+
+    <label>Service date (optional)</label>
+    <input id="service_date" placeholder="2025-12-21" />
+
+    <!-- token injected from server -->
+    <input type="hidden" id="token" value="{{ token }}" />
+
+    <button class="btn" id="sendBtn">Create & Send Invoice</button>
+
+    <div id="status" class="muted" style="margin-top:0.75rem;"></div>
+    <div id="err" class="error"></div>
+    <div id="ok" class="success"></div>
+
+    <div id="links" class="links" style="display:none;">
+      <div><strong>Invoice created ✅</strong></div>
+      <div class="linkrow">
+        <span class="small">Hosted payment link:</span>
+        <a id="hosted" href="#" target="_blank" rel="noopener">Open</a>
+        <button class="btn btn-ghost small" id="copyHosted" style="width:auto; padding:0.45rem 0.75rem;">Copy</button>
+      </div>
+      <div class="linkrow">
+        <span class="small">Invoice PDF:</span>
+        <a id="pdf" href="#" target="_blank" rel="noopener">Open</a>
+        <button class="btn btn-ghost small" id="copyPdf" style="width:auto; padding:0.45rem 0.75rem;">Copy</button>
+      </div>
+
+      <div class="muted small" style="margin-top:0.5rem;">
+        Invoice ID: <code id="invoiceId"></code>
+      </div>
+
+      <!-- We’ll wire this once you add mark-paid endpoint -->
+      <button class="btn btn-ghost" id="markPaidBtn" style="margin-top:0.75rem;">
+        Mark Paid (cash/zelle/etc.)
+      </button>
+      <div class="muted small" style="display:none;"></div>
+    </div>
+  </div>
+
+  <script>
+    const sendBtn = document.getElementById("sendBtn");
+    const statusBox = document.getElementById("status");
+    const errBox = document.getElementById("err");
+    const okBox = document.getElementById("ok");
+    const linksBox = document.getElementById("links");
+
+    const hostedA = document.getElementById("hosted");
+    const pdfA = document.getElementById("pdf");
+    const invoiceIdEl = document.getElementById("invoiceId");
+
+    const copyHosted = document.getElementById("copyHosted");
+    const copyPdf = document.getElementById("copyPdf");
+    const markPaidBtn = document.getElementById("markPaidBtn");
+    const bookingRefInput = document.getElementById("booking_ref");
+    const copyBookingRefBtn = document.getElementById("copyBookingRef");
+
+    function makeBookingRef() {
+      // Example: HPM-20251223-A1B2C3
+      const d = new Date();
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      const rand = Math.random().toString(16).slice(2, 8).toUpperCase();
+      return `HPM-${y}${m}${day}-${rand}`;
+    }
+
+    // If the server didn’t inject one, try pulling from URL, else generate
+    (function initBookingRef() {
+      if (bookingRefInput.value && bookingRefInput.value.trim()) return;
+
+      const params = new URLSearchParams(window.location.search);
+      const fromUrl = params.get("booking_ref");
+      if (fromUrl && fromUrl.trim()) {
+        bookingRefInput.value = fromUrl.trim();
+        return;
+      }
+
+      bookingRefInput.value = makeBookingRef();
+    })();
+
+    copyBookingRefBtn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      const val = bookingRefInput.value || "";
+      if (!val) return;
+      try { await navigator.clipboard.writeText(val); } catch (err) {}
+    });
+
+    function dollarsToCents(s) {
+      const v = parseFloat(String(s || "").trim());
+      if (Number.isNaN(v) || v <= 0) return null;
+      return Math.round(v * 100);
+    }
+
+    async function copyText(txt) {
+      try { await navigator.clipboard.writeText(txt); } catch(e) {}
+    }
+
+    async function readJsonOrText(resp) {
+      const ct = (resp.headers.get("content-type") || "").toLowerCase();
+
+      // Try JSON if server claims JSON
+      if (ct.includes("application/json")) {
+        try {
+          const data = await resp.json();
+          return { data, rawText: "" };
+        } catch (e) {
+          // fall through to text read
+        }
+      }
+
+      // Fallback to text (covers FastAPI 500 HTML/plain responses)
+      let rawText = "";
+      try { rawText = await resp.text(); } catch (e) {}
+      return { data: null, rawText };
+    }
+
+    sendBtn.addEventListener("click", async () => {
+      errBox.textContent = "";
+      okBox.textContent = "";
+      statusBox.textContent = "Creating invoice…";
+      linksBox.style.display = "none";
+      sendBtn.disabled = true;
+
+      const token = document.getElementById("token").value;
+
+      const amountCents = dollarsToCents(document.getElementById("amount").value);
+      if (!amountCents) {
+        errBox.textContent = "Enter a valid amount (example: 250.00).";
+        statusBox.textContent = "";
+        sendBtn.disabled = false;
+        return;
+      }
+
+      const payload = {
+        token,
+        name: document.getElementById("name").value || "",
+        email: document.getElementById("email").value || "",
+        amount_cents: amountCents,
+        description: document.getElementById("desc").value || "Hawkins Pro Mounting – Service Invoice",
+
+        // Optional “connect to appointment”
+        booking_ref: document.getElementById("booking_ref").value || "",
+        address_zip: document.getElementById("address_zip").value || "",
+        service_date: document.getElementById("service_date").value || "",
+        booking_source: "manual",
+      };
+
+      try {
+        const resp = await fetch("/admin/create-invoice", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        const { data, rawText } = await readJsonOrText(resp);
+
+        if (!resp.ok) {
+          const msg =
+            (data && (data.error || data.detail)) ||
+            rawText ||
+            `Failed to create invoice (${resp.status})`;
+          throw new Error(msg);
+        }
+
+        if (!data) {
+          throw new Error("Server did not return JSON on success.");
+        }
+
+        okBox.textContent = `Invoice created ✅ (status: ${data.invoice_status}, remaining: ${data.amount_remaining})`;
+        statusBox.textContent = "";
+
+        invoiceIdEl.textContent = data.invoice_id || "";
+        hostedA.href = data.hosted_invoice_url || "#";
+        pdfA.href = data.invoice_pdf || "#";
+
+        copyHosted.onclick = () => copyText(hostedA.href);
+        copyPdf.onclick = () => copyText(pdfA.href);
+
+        // Save invoice_id for mark-paid button later
+        markPaidBtn.dataset.invoiceId = data.invoice_id || "";
+
+        linksBox.style.display = "block";
+      } catch (e) {
+        errBox.textContent = e.message;
+        statusBox.textContent = "";
+      } finally {
+        sendBtn.disabled = false;
+      }
+    });
+
+    markPaidBtn.addEventListener("click", async () => {
+     const invoiceId = markPaidBtn.dataset.invoiceId || "";
+     if (!invoiceId) {
+       alert("Create an invoice first.");
+       return;
+     }
+
+     const token = document.getElementById("token").value;
+
+     errBox.textContent = "";
+     okBox.textContent = "";
+     statusBox.textContent = "Marking invoice paid…";
+     markPaidBtn.disabled = true;
+
+     try {
+       const resp = await fetch("/admin/mark-invoice-paid", {
+         method: "POST",
+         headers: { "Content-Type": "application/json" },
+         body: JSON.stringify({ token, invoice_id: invoiceId }),
+       });
+
+       const { data, rawText } = await readJsonOrText(resp);
+
+       if (!resp.ok) {
+       const msg =
+         (data && (data.error || data.detail)) ||
+         rawText ||
+         `Failed to mark paid (${resp.status})`;
+       throw new Error(msg);
+     }
+
+     if (!data) {
+       throw new Error("Server did not return JSON on success.");
+     }
+
+       okBox.textContent = "Marked paid ✅";
+       statusBox.textContent = "";
+     } catch (e) {
+        errBox.textContent = e.message;
+        statusBox.textContent = "";
+     } finally {
+       markPaidBtn.disabled = false;
+     }
+   });
+  </script>
+</body>
+</html>

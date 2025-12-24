@@ -121,6 +121,13 @@
       to the calendar and you should receive an email confirmation shortly.
     </p>
 
+    {% if booking_ref %}
+      <div class="detail-row">
+        <span class="label">Booking ref:</span>
+        <span class="value">{{ booking_ref }}</span>
+      </div>
+    {% endif %}
+
     <div class="detail-row">
       <span class="label">Primary service:</span>
       <span class="value">{{ service_type }}</span>
@@ -203,16 +210,52 @@
       </div>
     {% endif %}
 
+   <p style="font-size:12px;color:#9ca3af;">
+  DEBUG — hold_already_authorized = {{ hold_already_authorized }}
+   </p>
+
     <div class="cta-row">
       <a href="/" class="btn btn-primary">Back to Quote Tool</a>
+
       <a
-       href="/pay?name={{ name|urlencode }}&email={{ (email or '')|urlencode }}&phone={{ (phone or '')|urlencode }}&service_type={{ service_type|urlencode }}&start_iso={{ start.isoformat()|urlencode }}"
-       class="btn btn-primary"
+        href="/admin/invoice?booking_ref={{ (booking_ref or '')|urlencode }}"
+        class="btn btn-ghost"
+        target="_blank"
+        rel="noopener"
       >
-       Secure $20 Appointment Hold
+        Create Invoice (Admin)
       </a>
-      <a href="mailto:hawkinspromounting@gmail.com?subject=Hawkins%20Pro%20Mounting%20Booking"
-         class="btn btn-ghost">
+
+      {% if hold_already_authorized %}
+        <span class="btn btn-ghost" style="cursor: default; border-color:#bbf7d0; color:#166534;">
+          ✅ $20 hold authorized
+        </span>
+      {% else %}
+        {% set pay_url =
+          "/pay"
+          ~ "?service_type=" ~ (service_type|urlencode)
+          ~ "&time_slot=" ~ ((start.isoformat() if start else "")|urlencode)
+          ~ "&appointment_date=" ~ ((start.strftime('%Y-%m-%d') if start else "")|urlencode)
+          ~ "&appointment_time=" ~ ((start.strftime('%H:%M') if start else "")|urlencode)
+          ~ "&name=" ~ (name|urlencode)
+          ~ "&email=" ~ ((email or "")|urlencode)
+          ~ "&phone=" ~ ((phone or "")|urlencode)
+          ~ "&address_street=" ~ ((address_street or "")|urlencode)
+          ~ "&address_city=" ~ ((address_city or "")|urlencode)
+          ~ "&address_state=" ~ ((address_state or "")|urlencode)
+          ~ "&address_zip=" ~ ((address_zip or "")|urlencode)
+          ~ "&notes=" ~ ((notes or "")|urlencode)
+        %}
+
+        <a href="{{ pay_url }}" class="btn btn-primary">
+          Secure $20 Appointment Hold
+        </a>
+      {% endif %}
+
+      <a
+        href="mailto:hawkinspromounting@gmail.com?subject=Hawkins%20Pro%20Mounting%20Booking"
+        class="btn btn-ghost"
+      >
         Update or ask a question
       </a>
     </div>

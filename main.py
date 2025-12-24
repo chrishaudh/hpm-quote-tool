@@ -691,9 +691,19 @@ async def submit_booking(
 
     notes: str = Form(""),
 
-    payment_intent_id: str = Form(...),
+    payment_intent_id: str = Form(""),
 ):
     tz = pytz.timezone(TIMEZONE)
+
+    if not payment_intent_id:
+        return templates.TemplateResponse(
+            "booking_error.html",
+            {
+                "request": request,
+                "message": "Payment hold missing. Please start from the payment page to place your $20 appointment hold.",
+            },
+            status_code=400,
+        )
 
     # ----------------------------------------------------
 # 0) Verify Stripe hold (must succeed before booking)
