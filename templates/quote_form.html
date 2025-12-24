@@ -139,6 +139,11 @@
   </header>
 
   <form method="post" action="/quote-html">
+
+    <div style="font-size:12px;color:#999;margin-bottom:10px;">
+      Build: {{ build or "no-build" }}
+    </div>
+
     <!-- Contact Info -->
     <section>
       <h2 class="section-title">Your Info</h2>
@@ -151,6 +156,7 @@
             name="contact_name"
             type="text"
             required
+            value="{{ (prefilled.get('contact_name') if prefilled else '') }}"
           />
         </div>
         <div class="field-group">
@@ -161,7 +167,8 @@
             type="tel"
             required
             pattern="^[0-9\-\(\)\s]{10,}$"
-            placeholder="(240) 348-2278"
+            placeholder="(XXX) XXX-XXXX"
+            value="{{ (prefilled.get('contact_phone') if prefilled else '') }}"
           />
         </div>
       </div>
@@ -174,6 +181,7 @@
           type="email"
           required
           placeholder="you@example.com"
+          value="{{ (prefilled.get('contact_email') if prefilled else '') }}"
         />
       </div>
 
@@ -254,7 +262,7 @@
             name="tv_count"
             type="number"
             min="0"
-            value="1"
+            value="{{ (prefilled.get('tv_count') if prefilled else '1') }}"
           />
         </div>
 
@@ -273,8 +281,18 @@
 <!-- NEW: dynamic per-TV size inputs -->
 <div class="field-group" id="tv-sizes-wrapper" style="margin-top:0.5rem;">
   <label>TV sizes (inches)</label>
+
+  {% if errors and errors.get("tv_sizes") %}
+    <div style="margin:0.35rem 0; color:#b91c1c; font-weight:600;">
+      {{ errors.get("tv_sizes") }}
+    </div>
+  {% endif %}
+
   <div id="tv-sizes-container" class="two-col"></div>
   <p class="hint">Enter each TV size so the estimate can price them correctly.</p>
+
+  <!-- Server can send back tv sizes here (comma-separated) so JS can repopulate -->
+  <input type="hidden" id="tv_sizes_csv" value="{{ tv_sizes_csv or '' }}">
 </div>
 
 <!-- Keep legacy tv_size (hidden) for backward compatibility -->
@@ -550,172 +568,283 @@
   </form>
 
   <script>
-    // ---- Dynamic primary vs optional services ----
+    window.addEventListener("DOMContentLoaded", () => {
+      // ---- Dynamic primary vs optional services ----
+      const serviceSelect = document.getElementById("service");
+      const primaryDetailsContainer = document.getElementById("primary-service-details");
+      const optionalCheckboxesContainer = document.getElementById("optional-service-checkboxes");
+      const optionalDetailsContainer = document.getElementById("optional-service-details");
 
-    const serviceSelect = document.getElementById("service");
-    const primaryDetailsContainer = document.getElementById("primary-service-details");
-    const optionalCheckboxesContainer = document.getElementById("optional-service-checkboxes");
-    const optionalDetailsContainer = document.getElementById("optional-service-details");
+      const serviceSections = {
+        tv_mounting: document.getElementById("section-tv"),
+        picture_hanging: document.getElementById("section-pictures"),
+        floating_shelves: document.getElementById("section-shelves"),
+        closet_shelving: document.getElementById("section-closet"),
+        decor: document.getElementById("section-curtains"),
+      };
 
-    const serviceSections = {
-      tv_mounting: document.getElementById("section-tv"),
-      picture_hanging: document.getElementById("section-pictures"),
-      floating_shelves: document.getElementById("section-shelves"),
-      closet_shelving: document.getElementById("section-closet"),
-      decor: document.getElementById("section-curtains"),
-    };
+      const serviceLabels = {
+        tv_mounting: "TV Mounting",
+        picture_hanging: "Picture & Art Hanging",
+        floating_shelves: "Floating Shelves",
+        closet_shelving: "Closet Shelving / Organizers",
+        decor: "Curtains / Blinds / Decor",
+      };
 
-    const serviceLabels = {
-      tv_mounting: "TV Mounting",
-      picture_hanging: "Picture & Art Hanging",
-      floating_shelves: "Floating Shelves",
-      closet_shelving: "Closet Shelving / Organizers",
-      decor: "Curtains / Blinds / Decor",
-    };
+      // Keep track of which optional services are currently selected
+      const selectedOptionals = new Set();
 
-    // Keep track of which optional services are currently selected
-    const selectedOptionals = new Set();
+      const quoteForm = document.querySelector('form[action="/quote-html"]');
 
-    function updateServiceLayout() {
-      const primary = serviceSelect.value || "tv_mounting";
-
-      // Move primary section to the primary container
-      primaryDetailsContainer.innerHTML = "";
-      const primarySection = serviceSections[primary];
-      if (primarySection) {
-        primaryDetailsContainer.appendChild(primarySection);
-        primarySection.style.display = "block";
+      function removeAllTvSizesInputsEverywhere() {
+        document.querySelectorAll('input[name="tv_sizes"]').forEach((inp) => {
+          inp.required = false;
+          inp.disabled = true;
+          inp.removeAttribute("required");
+        });
       }
 
-      // Ensure primary is not in optional set
-      selectedOptionals.delete(primary);
-
-      // Rebuild optional service checkboxes
-      renderOptionalCheckboxes(primary);
-
-      // Move remaining sections to optional container and show/hide accordingly
-      optionalDetailsContainer.innerHTML = "";
-      Object.entries(serviceSections).forEach(([key, section]) => {
+      function setInputsEnabled(section, enabled) {
         if (!section) return;
-        if (key === primary) return;
+        const fields = section.querySelectorAll("input, select, textarea, button");
+        fields.forEach((el) => {
+          if (el.type === "hidden") return; // keep hidden inputs enabled
+          el.disabled = !enabled;
+          if (!enabled && el.required) el.required = false;
+        });
+      }
 
-        optionalDetailsContainer.appendChild(section);
-        const isSelected = selectedOptionals.has(key);
-        section.style.display = isSelected ? "block" : "none";
-      });
+      // ---- TV size controls ----
+      const tvCountInput = document.getElementById("tv_count");
+      const tvSizesContainer = document.getElementById("tv-sizes-container");
+      const legacyTvSizeHidden = document.getElementById("tv_size");
+      const tvSizesCsvEl = document.getElementById("tv_sizes_csv"); // optional hidden CSV (if you added it)
 
-      syncServiceFlags(primary);
-    }
+      function isTvActive(primaryKey) {
+        return primaryKey === "tv_mounting" || selectedOptionals.has("tv_mounting");
+      }
 
-    function renderOptionalCheckboxes(primary) {
-      optionalCheckboxesContainer.innerHTML = "";
+      function clearTvSizes() {
+        if (tvSizesContainer) tvSizesContainer.innerHTML = "";
+        if (legacyTvSizeHidden) legacyTvSizeHidden.value = "0";
+        if (tvSizesCsvEl) tvSizesCsvEl.value = "";
+      }
 
-      Object.entries(serviceSections).forEach(([key, section]) => {
-        if (!section || key === primary) return;
+      function disableAllTvSizeRequired() {
+        // Safety: if any tv_sizes inputs exist anywhere, remove required so browser doesn't block submit
+        document.querySelectorAll('input[name="tv_sizes"]').forEach((inp) => {
+          inp.required = false;
+        });
+      }
 
-        const row = document.createElement("div");
-        row.className = "checkbox-row";
+      function renderTvSizeInputs() {
+        if (!tvSizesContainer || !tvCountInput) return;
 
-        const id = `optional_${key}`;
-        const input = document.createElement("input");
-        input.type = "checkbox";
-        input.id = id;
-        input.dataset.serviceKey = key;
-        input.value = "true";
-        if (selectedOptionals.has(key)) {
-          input.checked = true;
+        const primary = serviceSelect.value || "tv_mounting";
+        const tvEnabled = isTvActive(primary);
+
+        // If TV isn't active, don't render/require anything
+        if (!tvEnabled) {
+          disableAllTvSizeRequired();
+          clearTvSizes();
+          return;
         }
 
-        input.addEventListener("change", () => {
-          if (input.checked) {
-            selectedOptionals.add(key);
-          } else {
-            selectedOptionals.delete(key);
-          }
-          const section = serviceSections[key];
-          if (section) {
-            section.style.display = input.checked ? "block" : "none";
-          }
-          syncServiceFlags(serviceSelect.value);
-        });
+        const count = Math.max(0, parseInt(tvCountInput.value || "0", 10));
+        tvSizesContainer.innerHTML = "";
 
-        const label = document.createElement("label");
-        label.htmlFor = id;
-        label.textContent = serviceLabels[key];
+        const existingSizes = (tvSizesCsvEl && tvSizesCsvEl.value)
+          ? tvSizesCsvEl.value.split(",").map(s => (s || "").trim())
+          : [];
 
-        row.appendChild(input);
-        row.appendChild(label);
-        optionalCheckboxesContainer.appendChild(row);
-      });
-    }
+        for (let i = 1; i <= count; i++) {
+          const wrap = document.createElement("div");
+          wrap.className = "field-group";
 
-    // Keep backend boolean flags (shelves, closet_shelving) in sync
-    function syncServiceFlags(primary) {
-      const activeKeys = new Set(selectedOptionals);
-      activeKeys.add(primary);
+          const label = document.createElement("label");
+          label.textContent = `TV size #${i} (inches)`;
+          label.style.fontWeight = "600";
 
-      const shelvesHidden = document.getElementById("shelves_flag");
-      if (shelvesHidden) {
-        shelvesHidden.value = activeKeys.has("floating_shelves") ? "true" : "false";
-      }
+          const input = document.createElement("input");
+          input.type = "number";
+          input.min = "0";
+          input.name = "tv_sizes";
+          input.placeholder = "e.g. 55";
 
-      const closetHidden = document.getElementById("closet_flag");
-      if (closetHidden) {
-        closetHidden.value = activeKeys.has("closet_shelving") ? "true" : "false";
-      }
-    }
+          // ✅ required ONLY when TV is active AND count > 0
+          input.required = (count > 0) && tvEnabled;
 
-    // Initialize layout on load
-    updateServiceLayout();
-    serviceSelect.addEventListener("change", updateServiceLayout);
+          // Refill from server CSV (if present)
+          if (existingSizes[i - 1]) input.value = existingSizes[i - 1];
 
-    const tvCountInput = document.getElementById("tv_count");
-  const tvSizesContainer = document.getElementById("tv-sizes-container");
-  const legacyTvSizeHidden = document.getElementById("tv_size");
+          input.addEventListener("input", () => {
+            // keep legacy hidden tv_size synced to first tv_sizes input
+            if (legacyTvSizeHidden) {
+              const first = document.querySelector('input[name="tv_sizes"]');
+              legacyTvSizeHidden.value = first && first.value ? first.value : "0";
+            }
+            // also keep CSV updated so re-render can repopulate
+            if (tvSizesCsvEl) {
+              const vals = Array.from(document.querySelectorAll('input[name="tv_sizes"]')).map(x => (x.value || "").trim());
+              tvSizesCsvEl.value = vals.join(",");
+            }
+          });
 
-  function renderTvSizeInputs() {
-    if (!tvSizesContainer || !tvCountInput) return;
+          wrap.appendChild(label);
+          wrap.appendChild(input);
+          tvSizesContainer.appendChild(wrap);
+        }
 
-    const count = Math.max(0, parseInt(tvCountInput.value || "0", 10));
-    tvSizesContainer.innerHTML = "";
-
-    for (let i = 1; i <= count; i++) {
-      const wrap = document.createElement("div");
-      wrap.className = "field-group";
-
-      const label = document.createElement("label");
-      label.textContent = `TV size #${i} (inches)`;
-      label.style.fontWeight = "600";
-
-      const input = document.createElement("input");
-      input.type = "number";
-      input.min = "0";
-      input.name = "tv_sizes";        // IMPORTANT: same name => list on backend
-      input.placeholder = "e.g. 55";
-      input.required = (count > 0);
-
-      input.addEventListener("input", () => {
+        // initial sync
         if (legacyTvSizeHidden) {
           const first = document.querySelector('input[name="tv_sizes"]');
           legacyTvSizeHidden.value = first && first.value ? first.value : "0";
         }
-      });
+        if (tvSizesCsvEl) {
+          const vals = Array.from(document.querySelectorAll('input[name="tv_sizes"]')).map(x => (x.value || "").trim());
+          tvSizesCsvEl.value = vals.join(",");
+        }
+      }
 
-      wrap.appendChild(label);
-      wrap.appendChild(input);
-      tvSizesContainer.appendChild(wrap);
-    }
+      function setTvControlsEnabled(enabled) {
+        if (!tvCountInput) return;
 
-    if (legacyTvSizeHidden) {
-      const first = document.querySelector('input[name="tv_sizes"]');
-      legacyTvSizeHidden.value = first && first.value ? first.value : "0";
-    }
-  }
+        tvCountInput.disabled = !enabled;
 
-  // render on load + whenever tv_count changes
-  renderTvSizeInputs();
-  tvCountInput.addEventListener("change", renderTvSizeInputs);
-  tvCountInput.addEventListener("input", renderTvSizeInputs);
+        if (!enabled) {
+          tvCountInput.value = "0";
+          disableAllTvSizeRequired();
+          clearTvSizes();
+        } else {
+          if (parseInt(tvCountInput.value || "0", 10) === 0) {
+            tvCountInput.value = "1";
+          }
+          renderTvSizeInputs();
+        }
+      }
+
+      // Keep backend boolean flags (shelves, closet_shelving) in sync
+      function syncServiceFlags(primary) {
+        const activeKeys = new Set(selectedOptionals);
+        activeKeys.add(primary);
+
+        const shelvesHidden = document.getElementById("shelves_flag");
+        if (shelvesHidden) shelvesHidden.value = activeKeys.has("floating_shelves") ? "true" : "false";
+
+        const closetHidden = document.getElementById("closet_flag");
+        if (closetHidden) closetHidden.value = activeKeys.has("closet_shelving") ? "true" : "false";
+      }
+
+      function renderOptionalCheckboxes(primary) {
+        optionalCheckboxesContainer.innerHTML = "";
+
+        Object.keys(serviceSections).forEach((key) => {
+          if (key === primary) return;
+
+          const row = document.createElement("div");
+          row.className = "checkbox-row";
+
+          const id = `optional_${key}`;
+          const input = document.createElement("input");
+          input.type = "checkbox";
+          input.id = id;
+          input.dataset.serviceKey = key;
+          input.value = "true";
+          input.checked = selectedOptionals.has(key);
+
+          input.addEventListener("change", () => {
+            if (input.checked) selectedOptionals.add(key);
+            else selectedOptionals.delete(key);
+
+            const section = serviceSections[key];
+            if (section) {
+              section.style.display = input.checked ? "block" : "none";
+              setInputsEnabled(section, input.checked);
+            }
+
+            // ✅ TV lock/clear behavior when TV is optional
+            const primaryKey = serviceSelect.value || "tv_mounting";
+            setTvControlsEnabled(isTvActive(primaryKey));
+
+            syncServiceFlags(primaryKey);
+            renderTvSizeInputs();
+          });
+
+          const label = document.createElement("label");
+          label.htmlFor = id;
+          label.textContent = serviceLabels[key];
+
+          row.appendChild(input);
+          row.appendChild(label);
+          optionalCheckboxesContainer.appendChild(row);
+        });
+      }
+
+      function updateServiceLayout() {
+        const primary = serviceSelect.value || "tv_mounting";
+
+        // Primary section
+        primaryDetailsContainer.innerHTML = "";
+        const primarySection = serviceSections[primary];
+        if (primarySection) {
+          primaryDetailsContainer.appendChild(primarySection);
+          primarySection.style.display = "block";
+          setInputsEnabled(primarySection, true);
+        }
+
+        // Ensure primary is not optional
+        selectedOptionals.delete(primary);
+
+        // Optional checkboxes
+        renderOptionalCheckboxes(primary);
+
+        // Move remaining sections to optional container
+        optionalDetailsContainer.innerHTML = "";
+        Object.entries(serviceSections).forEach(([key, section]) => {
+          if (!section) return;
+          if (key === primary) return;
+
+          optionalDetailsContainer.appendChild(section);
+
+          const isSelected = selectedOptionals.has(key);
+          section.style.display = isSelected ? "block" : "none";
+          setInputsEnabled(section, isSelected);
+        });
+
+        // Keep flags consistent
+        syncServiceFlags(primary);
+
+        // ✅ TV enable/lock/clear + required sizes
+        setTvControlsEnabled(isTvActive(primary));
+        renderTvSizeInputs();
+      }
+
+      // Hook up events
+      if (!serviceSelect) return;
+
+      serviceSelect.addEventListener("change", updateServiceLayout);
+
+      if (tvCountInput) {
+        tvCountInput.addEventListener("change", renderTvSizeInputs);
+        tvCountInput.addEventListener("input", renderTvSizeInputs);
+      }
+
+      if (quoteForm) {
+        quoteForm.addEventListener("submit", () => {
+          const primary = serviceSelect.value || "tv_mounting";
+          const tvEnabled = isTvActive(primary);
+
+          // If TV isn't part of this visit, make absolutely sure tv_sizes can't block submit
+          if (!tvEnabled) {
+            removeAllTvSizesInputsEverywhere();
+            clearTvSizes();
+          }
+        }, true); // <- capture phase so it runs before native validation
+      }
+
+      // Initialize
+      updateServiceLayout();
+    });
   </script>
 </body>
 </html>

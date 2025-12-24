@@ -8,6 +8,7 @@ import pytz
 
 import os
 import stripe
+import uuid
 
 from fastapi import FastAPI, Request, Form, BackgroundTasks, Query
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -48,7 +49,7 @@ if STRIPE_SECRET_KEY:
 async def show_quote_form(request: Request):
     return templates.TemplateResponse(
         "quote_form.html",
-        {"request": request},
+            {"request": request, "build": "LIVE-TEST-2025-12-24-1"},
     )
 
 # =====================================================
@@ -58,11 +59,29 @@ async def show_quote_form(request: Request):
 @app.get("/pay", response_class=HTMLResponse)
 async def pay_page(
     request: Request,
+
+    # Booking details
+    service_type: str = "",
+    time_slot: str = "",
+    appointment_date: str = "",
+    appointment_time: str = "",
+
+    services_this_visit_raw: str = "",
+    num_services: str = "",
+    estimated_hours: str = "",
+
+    # Customer details
     name: str = "",
     email: str = "",
     phone: str = "",
-    service_type: str = "",
-    start_iso: str = "",
+
+    # Address
+    address_street: str = "",
+    address_city: str = "",
+    address_state: str = "",
+    address_zip: str = "",
+
+    notes: str = "",
 ):
     return templates.TemplateResponse(
         "pay_hold.html",
@@ -70,36 +89,142 @@ async def pay_page(
             "request": request,
             "publishable_key": STRIPE_PUBLISHABLE_KEY,
             "amount_dollars": "20.00",
+
+            # Pass-through to template for the POST -> /book
+            "service_type": service_type,
+            "time_slot": time_slot,
+            "appointment_date": appointment_date,
+            "appointment_time": appointment_time,
+
+            "services_this_visit_raw": services_this_visit_raw,
+            "num_services": num_services,
+            "estimated_hours": estimated_hours,
+
             "name": name,
             "email": email,
             "phone": phone,
-            "service_type": service_type,
-            "start_iso": start_iso,
+
+            "address_street": address_street,
+            "address_city": address_city,
+            "address_state": address_state,
+            "address_zip": address_zip,
+
+            "notes": notes,
         },
     )
-
 
 @app.post("/api/create-hold-intent")
 async def create_hold_intent(payload: dict):
     if not STRIPE_SECRET_KEY:
-        return JSONResponse(
-            status_code=500,
-            content={"error": "Stripe not configured"},
-        )
+        return JSONResponse(status_code=500, content={"error": "Stripe not configured"})
 
-    intent = stripe.PaymentIntent.create(
-        amount=DEPOSIT_AMOUNT_CENTS,
-        currency="usd",
-        capture_method="manual",
-        description="Hawkins Pro Mounting – Appointment Hold",
-        automatic_payment_methods={"enabled": True},
-    )
+    # -------------------------
+    # Helper: safe truncation
+    # -------------------------
+    def trunc(val, max_len: int) -> str:
+        s = "" if val is None else str(val)
+        s = s.strip()
+        return s[:max_len]
 
-    return {
-        "client_secret": intent.client_secret,
-        "payment_intent_id": intent.id,
-    }
+    # Pull useful info from the client (safe defaults)
+    email = (payload.get("email") or "").strip()
+    name = (payload.get("name") or "").strip()
+    phone = (payload.get("phone") or "").strip()
 
+    service_type = payload.get("service_type") or ""
+    time_slot = payload.get("time_slot") or ""
+    appointment_date = payload.get("appointment_date") or ""
+    appointment_time = payload.get("appointment_time") or ""
+
+    services_this_visit_raw = payload.get("services_this_visit_raw") or ""
+    num_services = payload.get("num_services") or ""
+    estimated_hours = payload.get("estimated_hours") or ""
+
+    # NEW: optional fields (keep light)
+    address_zip = (payload.get("address_zip") or "").strip()
+    notes = payload.get("notes") or ""
+
+    # -------------------------
+    # NEW: booking_ref + source + environment
+    # -------------------------
+    booking_ref = uuid.uuid4().hex[:12]  # short unique ID, e.g. "a1b2c3d4e5f6"
+    booking_source = (payload.get("booking_source") or "quote_tool").strip()  # "quote_tool" or "phone"
+    environment = (os.getenv("APP_ENV") or "prod").strip()  # "prod" or "test"
+
+    # ----------------------------------------
+    # Optional: Create/find a Stripe Customer
+    # ----------------------------------------
+    customer_id = None
+    if email:
+        try:
+            existing = stripe.Customer.list(email=email, limit=1)
+            if existing.data:
+                customer_id = existing.data[0].id
+            else:
+                customer = stripe.Customer.create(
+                    email=email,
+                    name=name or None,
+                    phone=phone or None,
+                )
+                customer_id = customer.id
+        except Exception:
+            # Not fatal — still allow payment intent creation
+            customer_id = None
+
+    # -------------------------
+    # Create PaymentIntent hold
+    # -------------------------
+    try:
+        
+        metadata = {
+            # NEW - always helpful for linking across systems
+            "booking_ref": booking_ref,
+            "booking_source": trunc(booking_source, 30),
+            "environment": trunc(environment, 10),
+
+            # Customer
+            "email": trunc(email, 100),
+            "name": trunc(name, 80),
+            "phone": trunc(phone, 30),
+
+            # Booking summary
+            "service_type": trunc(service_type, 80),
+            "time_slot": trunc(time_slot, 80),
+            "appointment_date": trunc(appointment_date, 20),
+            "appointment_time": trunc(appointment_time, 20),
+
+            # Quote/service bundle
+            "services_this_visit_raw": trunc(services_this_visit_raw, 450),
+            "num_services": trunc(num_services, 10),
+            "estimated_hours": trunc(estimated_hours, 20),
+
+            # Optional light fields
+            "address_zip": trunc(address_zip, 10),
+            "notes_preview": trunc(notes, 200),
+        }
+
+        intent_params = {
+            "amount": DEPOSIT_AMOUNT_CENTS,
+            "currency": "usd",
+            "capture_method": "manual",
+            "description": "Hawkins Pro Mounting – Appointment Hold",
+            "automatic_payment_methods": {"enabled": True},
+            "metadata": metadata,
+        }
+
+        if customer_id:
+            intent_params["customer"] = customer_id
+
+        intent = stripe.PaymentIntent.create(**intent_params)
+
+        return {
+            "client_secret": intent.client_secret,
+            "payment_intent_id": intent.id,
+            "booking_ref": booking_ref,  # optional but useful for your own logs/UI
+        }
+
+    except Exception as e:
+        return JSONResponse(status_code=400, content={"error": f"Failed to create hold: {str(e)}"})
 
 @app.post("/api/capture-hold")
 async def capture_hold(payload: dict):
@@ -117,6 +242,205 @@ async def capture_hold(payload: dict):
         "status": intent.status,
         "payment_intent_id": intent.id,
     }
+
+@app.post("/api/cancel-hold")
+async def cancel_hold(payload: dict):
+    token = payload.get("token", "")
+    payment_intent_id = payload.get("payment_intent_id", "")
+
+    if token != ADMIN_CAPTURE_TOKEN:
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+
+    if not payment_intent_id:
+        return JSONResponse(status_code=400, content={"error": "Missing payment_intent_id"})
+
+    try:
+        intent = stripe.PaymentIntent.cancel(payment_intent_id)
+        return {"status": intent.status, "payment_intent_id": intent.id}
+    except Exception as e:
+        return JSONResponse(status_code=400, content={"error": f"Cancel failed: {str(e)}"})
+
+@app.get("/admin/invoice", response_class=HTMLResponse)
+async def admin_invoice_page(
+    request: Request,
+    token: str = Query(""),
+    booking_ref: str = Query(""),
+):
+    # Option B protection: require ?token=
+    if token != ADMIN_CAPTURE_TOKEN:
+        return HTMLResponse("Unauthorized", status_code=401)
+
+    return templates.TemplateResponse(
+        "admin_invoice.html",
+        {
+            "request": request,
+            "token": token,
+            "booking_ref": (booking_ref or "").strip(),
+        },
+    )
+
+@app.post("/admin/create-invoice")
+async def admin_create_invoice(payload: dict):
+    # Detect environment (local vs prod)
+    environment = (os.getenv("APP_ENV") or "prod").strip()
+    force_new_customer = (environment == "local")
+
+    # Protect this endpoint
+    token = payload.get("token", "")
+    if token != ADMIN_CAPTURE_TOKEN:
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+
+    email = (payload.get("email") or "").strip()
+    name = (payload.get("name") or "").strip()
+    amount_cents = int(payload.get("amount_cents") or 0)
+    description = payload.get("description") or "Hawkins Pro Mounting – Service Invoice"
+    days_until_due = 0  # always due immediately
+    payment_intent_id = (payload.get("payment_intent_id") or "").strip()
+    booking_ref = (payload.get("booking_ref") or "").strip()
+    booking_source = (payload.get("booking_source") or "manual").strip()
+    service_date = (payload.get("service_date") or "").strip()
+    address_zip = (payload.get("address_zip") or "").strip()
+    booking_ref = (payload.get("booking_ref") or "").strip()
+    if not booking_ref:
+        booking_ref = f"HPM-{datetime.utcnow().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
+
+    invoice_metadata = {
+        "booking_ref": booking_ref,
+        "booking_source": booking_source,
+        "service_date": service_date,
+        "address_zip": address_zip,
+    }
+
+    if not email or amount_cents <= 0:
+        return JSONResponse(status_code=400, content={"error": "Missing email or amount_cents"})
+
+    # 1) Find or create customer
+    if force_new_customer:
+        # Local testing: always create a fresh customer (avoids paid invoices)
+        customer = stripe.Customer.create(email=email, name=name or None)
+    else:
+        existing = stripe.Customer.list(email=email, limit=1)
+        if existing.data:
+            customer = existing.data[0]
+        else:
+            customer = stripe.Customer.create(email=email, name=name or None)
+
+    print("INVOICE ITEM DEBUG:", {
+        "email": email,
+        "customer_id": customer.id if customer else None,
+        "amount_cents": amount_cents,
+        "description": description,
+        "booking_ref": booking_ref,
+        "booking_source": booking_source,
+    })
+
+    # 2) Create an invoice item (line item)
+    stripe.InvoiceItem.create(
+        customer=customer.id,
+        amount=amount_cents,
+        currency="usd",
+        description=description,
+        metadata=invoice_metadata,
+    )
+
+    # 3) Create invoice and send it
+    invoice = stripe.Invoice.create(
+        customer=customer.id,
+        collection_method="send_invoice",
+        days_until_due=days_until_due,
+        auto_advance=True,
+        pending_invoice_items_behavior="include",
+        metadata=invoice_metadata,
+    )
+
+    # Finalize now (hosted URL + PDF become available)
+    invoice = stripe.Invoice.finalize_invoice(invoice.id)
+
+    invoice = stripe.Invoice.retrieve(invoice.id)
+    print("INVOICE DEBUG (after finalize):", {
+        "id": invoice.id,
+        "status": getattr(invoice, "status", None),
+        "total": getattr(invoice, "total", None),
+        "amount_due": getattr(invoice, "amount_due", None),
+        "amount_remaining": getattr(invoice, "amount_remaining", None),
+        "paid": getattr(invoice, "paid", None),
+    })
+
+    if environment != "local":
+        invoice = stripe.Invoice.send_invoice(invoice.id)
+
+    invoice = stripe.Invoice.retrieve(invoice.id)
+    print("INVOICE DEBUG (after send):", {
+        "id": invoice.id,
+        "status": getattr(invoice, "status", None),
+        "total": getattr(invoice, "total", None),
+        "amount_due": getattr(invoice, "amount_due", None),
+        "amount_remaining": getattr(invoice, "amount_remaining", None),
+        "paid": getattr(invoice, "paid", None),
+    })
+
+    print("INVOICE DEBUG:", {
+        "id": invoice.id,
+        "status": getattr(invoice, "status", None),
+        "total": getattr(invoice, "total", None),
+        "amount_due": getattr(invoice, "amount_due", None),
+        "amount_remaining": getattr(invoice, "amount_remaining", None),
+        "paid": getattr(invoice, "paid", None),
+    })
+
+    # 4) Cancel/release the $20 hold (recommended)
+    hold_cancel_status = None
+    if payment_intent_id:
+        try:
+            canceled = stripe.PaymentIntent.cancel(payment_intent_id)
+            hold_cancel_status = canceled.status
+        except Exception as e:
+            hold_cancel_status = f"cancel_failed: {str(e)}"
+
+    return {
+        "status": "created",
+        "invoice_id": invoice.id,
+        "invoice_status": invoice.status,
+        "paid": getattr(invoice, "paid", None),
+        "amount_due": getattr(invoice, "amount_due", None),
+        "amount_paid": getattr(invoice, "amount_paid", None),
+        "amount_remaining": getattr(invoice, "amount_remaining", None),
+        "hosted_invoice_url": getattr(invoice, "hosted_invoice_url", None),
+        "invoice_pdf": getattr(invoice, "invoice_pdf", None),
+        "hold_cancel_status": hold_cancel_status,
+    }
+
+@app.post("/admin/mark-invoice-paid")
+async def admin_mark_invoice_paid(payload: dict):
+    token = payload.get("token", "")
+    invoice_id = (payload.get("invoice_id") or "").strip()
+
+    if token != ADMIN_CAPTURE_TOKEN:
+        return JSONResponse(status_code=401, content={"error": "Unauthorized"})
+
+    if not invoice_id:
+        return JSONResponse(status_code=400, content={"error": "Missing invoice_id"})
+
+    try:
+        # Mark as paid out-of-band (cash/zelle/etc.)
+        invoice = stripe.Invoice.pay(invoice_id, paid_out_of_band=True)
+        return {"status": invoice.status, "invoice_id": invoice.id}
+    except Exception as e:
+        return JSONResponse(status_code=400, content={"error": f"Mark paid failed: {str(e)}"})
+
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_page(request: Request, token: str = ""):
+    # Simple protection: require token in querystring
+    if token != ADMIN_CAPTURE_TOKEN:
+        return HTMLResponse("<h3>Unauthorized</h3>", status_code=401)
+
+    return templates.TemplateResponse(
+        "admin_invoice.html",
+        {
+            "request": request,
+            "token": token,
+        },
+    )
 
 # =====================================================
 # Service + Zapier configuration
@@ -332,9 +656,6 @@ async def show_booking_form(
 # =====================================================
 # BOOKING FORM (POST)
 # =====================================================
-# =====================================================
-# BOOKING FORM (POST)
-# =====================================================
 @app.post("/book", response_class=HTMLResponse)
 async def submit_booking(
     request: Request,
@@ -369,8 +690,38 @@ async def submit_booking(
     estimated_hours: Optional[float] = Form(None),
 
     notes: str = Form(""),
+
+    payment_intent_id: str = Form(...),
 ):
     tz = pytz.timezone(TIMEZONE)
+
+    # ----------------------------------------------------
+# 0) Verify Stripe hold (must succeed before booking)
+# ----------------------------------------------------
+    if not STRIPE_SECRET_KEY:
+        return templates.TemplateResponse(
+            "booking_error.html",
+            {"request": request, "message": "Payment system not configured. Please contact us."},
+            status_code=500,
+        )
+
+    try:
+        intent = stripe.PaymentIntent.retrieve(payment_intent_id)
+        booking_ref = (intent.metadata or {}).get("booking_ref", "")
+    except Exception:
+        return templates.TemplateResponse(
+            "booking_error.html",
+            {"request": request, "message": "Could not verify payment hold. Please try again."},
+            status_code=400,
+        )
+
+    # For manual capture, a successful authorization will usually be "requires_capture"
+    if intent.status not in ("requires_capture", "succeeded"):
+        return templates.TemplateResponse(
+            "booking_error.html",
+            {"request": request, "message": "Your $20 hold was not completed. Please try again."},
+            status_code=400,
+        )
 
     # 0) Validate address
     is_valid_address, parsed_address, addr_error = validate_address(
@@ -533,32 +884,56 @@ async def submit_booking(
         services_this_visit,
         duration_hours,
         effective_num_services,
+        booking_ref,
+        payment_intent_id,
     )
 
     # 8) Show confirmation page
-    return templates.TemplateResponse(
-        "booking_confirm.html",
-        {
-            "request": request,
-            "name": name,
-            "service_type": service_type,
-            "start": start_dt,
-            "end": end_dt,
-            "address": full_address,
-            "services_this_visit": services_this_visit,
-            "num_services": effective_num_services,
-            "duration_hours": duration_hours,
+    hold_already_authorized = intent.status in ("requires_capture", "succeeded")
 
-            # Extra fields your template references (safe defaults)
-            "tv_size": None,
-            "picture_count": None,
-            "shelves_count": None,
-            "closet_shelf_count": None,
-            "decor_count": None,
-            "contact_pref": "email",
-            "ladder_required": False,
-        },
-    )
+    return templates.TemplateResponse(
+    "booking_confirm.html",
+    {
+        "request": request,
+        "name": name,
+        "service_type": service_type,
+        "start": start_dt,
+        "end": end_dt,
+        "address": full_address,
+        "services_this_visit": services_this_visit,
+        "num_services": effective_num_services,
+        "duration_hours": duration_hours,
+
+        # ✅ NEW: used by booking_confirm.html to hide the hold button
+        "hold_already_authorized": hold_already_authorized,
+
+        # ✅ NEW: pass-through fields so the /pay link can be fully pre-filled
+        "email": email,
+        "phone": phone,
+        "notes": notes,
+
+        "address_street": parsed_address.get("street", ""),
+        "address_city": parsed_address.get("city", ""),
+        "address_state": parsed_address.get("state", ""),
+        "address_zip": parsed_address.get("zip", ""),
+
+        # Optional: if you want the /pay page to still receive these in query params
+        # (it won't hurt to include them)
+        "time_slot": time_slot or start_dt.isoformat(),
+        "appointment_date": appointment_date or start_dt.strftime("%Y-%m-%d"),
+        "appointment_time": appointment_time or start_dt.strftime("%H:%M"),
+        "booking_ref": booking_ref,
+
+        # Extra fields your template references (safe defaults)
+        "tv_size": None,
+        "picture_count": None,
+        "shelves_count": None,
+        "closet_shelf_count": None,
+        "decor_count": None,
+        "contact_pref": "email",
+        "ladder_required": False,
+    },
+)
 
 # =====================================================
 # Pydantic model for JSON quote requests
@@ -603,10 +978,6 @@ class QuoteRequest(BaseModel):
 
     zip_code: str = "20735"
 
-
-# =====================================================
-# Zapier sending helper for QUOTES
-# =====================================================
 # =====================================================
 # Zapier sending helper for QUOTES
 # =====================================================
@@ -752,9 +1123,6 @@ def send_lead_to_zapier(
 # =====================================================
 # Zapier sending helper for BOOKINGS
 # =====================================================
-# =====================================================
-# Zapier sending helper for BOOKINGS
-# =====================================================
 def send_booking_to_zapier(
     name: str,
     email: str,
@@ -768,6 +1136,8 @@ def send_booking_to_zapier(
     services_this_visit: list,
     duration_hours: float,
     num_services: int,
+    booking_ref: str = "",
+    payment_intent_id: str = "",
 ) -> None:
     """
     Sends booking details (including duration_hours) to the Booking Zap.
@@ -793,6 +1163,8 @@ def send_booking_to_zapier(
 
         payload = {
             "timestamp": datetime.utcnow().isoformat(),
+            "booking_ref": booking_ref or "",
+            "payment_intent_id": payment_intent_id or "",
             "name": name,
             "email": email,
             "phone": phone,
@@ -961,20 +1333,48 @@ async def quote_html(
     # ----------------------------------------------------
     # NEW: read tv_sizes[] from the posted form (one input per TV)
     form = await request.form()
+
+    # Pull tv_count directly from the posted form
+    try:
+        tv_count_val = int(str(form.get("tv_count") or "0").strip() or "0")
+    except ValueError:
+        tv_count_val = 0
+
     tv_sizes_raw = form.getlist("tv_sizes")
 
-    tv_sizes = []
+    # Normalize tv_sizes into ints (keep 0s so we can validate “missing” inputs)
+    tv_sizes_all = []
     for s in tv_sizes_raw:
         try:
-            v = int(str(s).strip() or "0")
+            tv_sizes_all.append(int(str(s).strip() or "0"))
         except ValueError:
-            v = 0
-        if v > 0:
-            tv_sizes.append(v)
+            tv_sizes_all.append(0)
 
-    # If sizes were entered, tv_count becomes the number of size boxes
-    if tv_sizes:
-        tv_count = len(tv_sizes)
+    # ✅ Server-side validation:
+    # If user says they have TVs (>0), they MUST provide that many sizes and none can be 0/blank
+    if tv_count_val > 0:
+        if len(tv_sizes_all) != tv_count_val or any(v <= 0 for v in tv_sizes_all):
+            # Preserve everything they typed
+            prefilled = {k: form.get(k, "") for k in form.keys()}
+            # Preserve tv_sizes too (as a CSV so the client can refill the dynamic inputs)
+            tv_sizes_csv = ",".join(str(v) for v in tv_sizes_all)
+
+            return templates.TemplateResponse(
+                "quote_form.html",
+                {
+                    "request": request,
+                    "errors": {"tv_sizes": "Please enter a size for each TV."},
+                    "prefilled": prefilled,
+                    "tv_sizes_csv": tv_sizes_csv,
+                },
+                status_code=400,
+            )
+
+    # ✅ Use the validated list (filter to >0 now)
+    tv_sizes = [v for v in tv_sizes_all if v > 0]
+
+    # Keep tv_count consistent
+    tv_count = tv_count_val
 
     result = calculate_quote(
         service=service,
