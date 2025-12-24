@@ -195,6 +195,12 @@
   <!-- Line Items Card -->
   <div class="card">
     <h2 class="section-title">What’s Included in This Estimate</h2>
+    {% if services_for_quote and services_for_quote|length %}
+      <p class="muted" style="margin:0.25rem 0 0.5rem;">
+        Services included:
+        <strong>{{ services_for_quote | join(", ") }}</strong>
+      </p>
+    {% endif %}
 
     <div class="line-items">
       {% set li = line_items or {} %}
@@ -204,7 +210,7 @@
          <span class="line-item-label">
            TV mounting
            {% if tv_sizes and tv_sizes|length > 0 %}
-             ({{ tv_sizes|length }} TVs: {{ tv_sizes|join('", "') }}" )
+             ({{ tv_sizes|length }} TVs: {{ tv_sizes|join('", "') }}")
            {% elif tv_count and tv_count > 0 %}
              ({{ tv_count }} TV{% if tv_count != 1 %}s{% endif %}{% if tv_size and tv_size > 0 %}, {{ tv_size }}"{% endif %})
            {% endif %}
@@ -361,15 +367,6 @@
       Prefer to double-check something first?
       You can send a quick question by email before you book.
     </p>
-
-    {% if services_for_quote and services_for_quote|length %}
-      <h3>Services this visit</h3>
-      <ul>
-        {% for s in services_for_quote %}
-          <li>{{ s }}</li>
-        {% endfor %}
-      </ul>
-    {% endif %}
 
     <div class="cta-buttons">
       <a href="{{ booking_url }}" class="btn-primary">
