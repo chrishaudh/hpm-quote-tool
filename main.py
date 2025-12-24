@@ -1432,6 +1432,21 @@ async def quote_html(
     }
 
     # ----------------------------------------------------
+    # 2B) Friendly list for quote page display
+    # ----------------------------------------------------
+    services_for_quote = []
+    if service_flags.get("tv"):
+        services_for_quote.append("TV Mounting")
+    if service_flags.get("pictures"):
+        services_for_quote.append("Picture & Art Hanging")
+    if service_flags.get("shelves"):
+        services_for_quote.append("Floating Shelves")
+    if service_flags.get("closet"):
+        services_for_quote.append("Closet Shelving")
+    if service_flags.get("decor"):
+        services_for_quote.append("Curtains / Blinds / Decor")
+
+    # ----------------------------------------------------
     # 3) Build booking URL (passes multi-service flags)
     # ----------------------------------------------------
     booking_url = build_booking_url(
@@ -1466,6 +1481,32 @@ async def quote_html(
     # ----------------------------------------------------
     # 5) Render quote result page
     # ----------------------------------------------------
+    # ---- Flatten line_items for the template (so itemized pricing always shows) ----
+    line_items = result.get("line_items") or {}
+
+    template_line_items = {
+        "tv_total": line_items.get("tv_total", 0.0),
+        "tv_remove_total": line_items.get("tv_remove_total", 0.0),
+
+        "picture_total": line_items.get("picture_total", 0.0),
+        "picture_large_total": line_items.get("picture_large_total", 0.0),
+
+        "shelves_total": line_items.get("shelves_total", 0.0),
+        "shelves_remove_total": line_items.get("shelves_remove_total", 0.0),
+
+        "closet_total": line_items.get("closet_total", 0.0),
+        "closet_remove_total": line_items.get("closet_remove_total", 0.0),
+
+        "curtains_total": line_items.get("curtains_total", 0.0),
+        "curtains_remove_total": line_items.get("curtains_remove_total", 0.0),
+
+        "addons": line_items.get("addons", 0.0),
+        "multi_service_discount": line_items.get("multi_service_discount", 0.0),
+
+        "same_day_surcharge": line_items.get("same_day_surcharge", 0.0),
+        "after_hours_surcharge": line_items.get("after_hours_surcharge", 0.0),
+    }
+
     return templates.TemplateResponse(
         "quote_result.html",
         {
@@ -1474,7 +1515,9 @@ async def quote_html(
             "contact_phone": contact_phone,
             "contact_email": contact_email,
             "booking_url": booking_url,
+            "services_for_quote": services_for_quote,
             **result,
+            **template_line_items,
         },
     )
 

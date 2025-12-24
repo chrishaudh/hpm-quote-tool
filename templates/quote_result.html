@@ -362,6 +362,15 @@
       You can send a quick question by email before you book.
     </p>
 
+    {% if services_for_quote and services_for_quote|length %}
+      <h3>Services this visit</h3>
+      <ul>
+        {% for s in services_for_quote %}
+          <li>{{ s }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
     <div class="cta-buttons">
       <a href="{{ booking_url }}" class="btn-primary">
         Book This Install
